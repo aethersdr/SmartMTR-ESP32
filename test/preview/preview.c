@@ -109,6 +109,16 @@ static void drag(lv_point_t from, int dx, int dy)
     run_for(100);
 }
 
+// A short tap, well under LVGL's long-press time.
+static void tap(lv_point_t at)
+{
+    s_finger = at;
+    s_finger_down = true;
+    run_for(80);
+    s_finger_down = false;
+    run_for(100);
+}
+
 static int count_kind(knob_action_kind_t kind)
 {
     int n = 0;
@@ -126,12 +136,50 @@ static int count_kind(knob_action_kind_t kind)
         printf("touch test ok: %s\n", what);                                   \
     } while (0)
 
-// Drives the open menu with a scripted finger.
+static lv_obj_t *find_label(lv_obj_t *obj, const char *text)
+{
+    for (uint32_t i = 0; i < lv_obj_get_child_count(obj); ++i) {
+        lv_obj_t *c = lv_obj_get_child(obj, (int32_t)i);
+        if (lv_obj_check_type(c, &lv_label_class) && strcmp(lv_label_get_text(c), text) == 0)
+            return c;
+        lv_obj_t *found = find_label(c, text);
+        if (found)
+            return found;
+    }
+    return NULL;
+}
+
+// A new spectrum frame, as AetherSDR sends 20 a second.
+static void fresh_spectrum(void)
+{
+    knob_model_t *m = model_get();
+    m->spectrum_ms++;
+    m->revision++;
+}
+
+// Drives the face and the menu with a scripted finger.
 static int touch_test(void)
 {
     lv_indev_t *finger = lv_indev_create();
     lv_indev_set_type(finger, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(finger, finger_read);
+
+    // Centre dock: spectrum by default, a tap shows the tiles, a sideways
+    // swipe brings the spectrum back.
+    fresh_spectrum();
+    run_for(100);
+    lv_obj_t *af = find_label(lv_screen_active(), "AF\n50");
+    CHECK(af && !lv_obj_is_visible(af), "the dock opens on the spectrum, tiles hidden");
+    fresh_spectrum();
+    tap((lv_point_t){240, 250});
+    CHECK(lv_obj_is_visible(af), "a tap on the spectrum shows the tiles");
+    CHECK(s_action_count == 0, "...and is not also a tile tap");
+    fresh_spectrum();
+    drag((lv_point_t){150, 335}, 180, 0);
+    fresh_spectrum();
+    run_for(60);
+    CHECK(!lv_obj_is_visible(af), "a sideways swipe switches back to the spectrum");
+
     menu_open();
     run_for(400);
 
@@ -159,7 +207,7 @@ static int touch_test(void)
     lv_obj_scroll_to_view(lv_obj_get_parent(sq), LV_ANIM_OFF);
     run_for(100);
     s_action_count = 0;
-    drag(centre_of(sq), 0, 0);
+    tap(centre_of(sq));
     CHECK(count_kind(ACT_MENU_SET_SWITCH) == 1 && s_actions[0].arg == 1, "tapping a switch turns it on");
 
     // Dial only: the highlight starts on Mode. Click edits it, turning
@@ -231,6 +279,14 @@ int main(int argc, char **argv)
         put(&m->tx_kv, false, "compander_level", "60");
         put(&m->tx_kv, false, "sb_monitor", "0");
         put(&m->tx_kv, false, "mon_gain_sb", "50");
+        // A speech-like spectrum: energy 300-2800 Hz, falling off above.
+        static const uint8_t speech[32] = {60, 110, 150, 170, 160, 175, 150, 140, 155, 145, 150, 160,
+                                           150, 130, 140, 135, 145, 150, 160, 140, 150, 145, 120, 60,
+                                           30, 20, 15, 12, 10, 8, 8, 6};
+        memcpy(m->spectrum, speech, sizeof speech);
+        m->spectrum_bars = 32;
+        m->spectrum_span_hz = 4000;
+        m->spectrum_ms = 1;
     }
     m->revision = 1;
 
@@ -241,6 +297,14 @@ int main(int argc, char **argv)
     lv_display_set_buffers(d, buf, NULL, sizeof buf, LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(d, flush);
     ui_start(d);
+    run_for(100);   // the first refresh picks up the spectrum
+    if (strcmp(state, "peaks") == 0) {
+        // A second frame with one bar fallen, to show its peak-hold mark.
+        m->spectrum[5] = 120;
+        m->spectrum_ms = 2;
+        m->revision++;
+        run_for(100);
+    }
     if (strcmp(state, "touchtest") == 0)
         return touch_test();
     if (strncmp(state, "menu", 4) == 0) {

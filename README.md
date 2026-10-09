@@ -82,6 +82,18 @@ Rows:
 Nothing in the menu keys the transmitter. VOX and TUNE are deliberately left
 out. To add a row, add one entry to the table in `main/menu_items.c`.
 
+### Centre: spectrum or tiles
+
+With an AetherSDR that sends it, the centre shows a 32-bar spectrum (0–4 kHz,
+with peak hold) of the receive audio you are hearing, after all DSP, like
+SmartMTR's. **Tap** it to show the tiles below instead; they return to the
+spectrum after 8 s unused, unless a tile is on the dial. A **sideways
+swipe** switches either way. Without a spectrum the tiles stay.
+
+The spectrum is a CTR2 link extension, negotiated through HID Feature
+report `0x02` (see AetherSDR `docs/ctr2-usb-relay-design.md`,
+"Extensions"). A CTR2 never offers or receives it.
+
 Tiles: **AF** (audio level), **AGC** (threshold), **FILT** (width, 50 Hz per detent,
 about the passband centre), and **NR / NB / ANF** (level).
 

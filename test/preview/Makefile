@@ -7,6 +7,7 @@ preview: $(SRCS) lv_conf.h
 
 faces: preview
 	./preview face.ppm bound && magick face.ppm face.png
+	./preview peaks.ppm peaks && magick peaks.ppm peaks.png
 	./preview waiting.ppm waiting && magick waiting.ppm waiting.png
 	./preview menu.ppm menu && magick menu.ppm menu.png
 	./preview menu_mid.ppm menu_mid && magick menu_mid.ppm menu_mid.png

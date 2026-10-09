@@ -69,6 +69,12 @@ typedef struct {
     float fwd_watts, swr, mic_db, comp_db;
     bool meters_seen;          // a VITA meter packet has arrived over the link
     knob_kv_t tx_kv;           // `transmit` values the menu uses
+    // Audio spectrum from AetherSDR (link extension AUDIO_SPECTRUM): what the
+    // operator hears, post-DSP. Levels 0..255 over CTR2_SPECTRUM_FLOOR_DB..0 dBFS.
+    uint8_t spectrum[64];
+    int spectrum_bars;         // 0 until the first frame
+    int spectrum_span_hz;
+    uint32_t spectrum_ms;      // when it last arrived
     uint32_t revision;         // bumped on every change; the UI redraws on change
 } knob_model_t;
 

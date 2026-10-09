@@ -45,9 +45,42 @@ static bool s_radio_open;
 
 // ---------------------------------------------------------------- descriptors
 
+// Report 0x01: the link, 8 bytes each way. Report 0x02: Feature report for
+// link extension negotiation (AetherSDR docs/ctr2-usb-relay-design.md,
+// "Extensions"). Both in one vendor collection (usage page 0xFF00, usage 1),
+// which is what AetherSDR lists.
 static const uint8_t s_report_desc[] = {
-    TUD_HID_REPORT_DESC_GENERIC_INOUT(CTR2_REPORT_BYTES, HID_REPORT_ID(CTR2_REPORT_ID))
+    HID_USAGE_PAGE_N(HID_USAGE_PAGE_VENDOR, 2),
+    HID_USAGE(0x01),
+    HID_COLLECTION(HID_COLLECTION_APPLICATION),
+        HID_REPORT_ID(CTR2_REPORT_ID)
+        HID_USAGE(0x02),
+        HID_LOGICAL_MIN(0x00),
+        HID_LOGICAL_MAX_N(0xff, 2),
+        HID_REPORT_SIZE(8),
+        HID_REPORT_COUNT(CTR2_REPORT_BYTES),
+        HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE),
+        HID_USAGE(0x03),
+        HID_LOGICAL_MIN(0x00),
+        HID_LOGICAL_MAX_N(0xff, 2),
+        HID_REPORT_SIZE(8),
+        HID_REPORT_COUNT(CTR2_REPORT_BYTES),
+        HID_OUTPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE),
+        HID_REPORT_ID(CTR2_FEATURE_REPORT_ID)
+        HID_USAGE(0x04),
+        HID_LOGICAL_MIN(0x00),
+        HID_LOGICAL_MAX_N(0xff, 2),
+        HID_REPORT_SIZE(8),
+        HID_REPORT_COUNT(CTR2_FEATURE_BYTES),
+        HID_FEATURE(HID_DATA | HID_VARIABLE | HID_ABSOLUTE),
+    HID_COLLECTION_END,
 };
+
+// Link extensions this firmware offers, and the ones AetherSDR accepted.
+// The accepted set is written from the TinyUSB task and applied by the radio
+// task; it lasts until the device leaves the bus.
+#define OFFERED_EXTENSIONS CTR2_CAP(CTR2_EXT_AUDIO_SPECTRUM)
+static volatile uint32_t s_accepted_extensions;
 
 static const tusb_desc_device_t s_device_desc = {
     .bLength = sizeof(tusb_desc_device_t),
@@ -92,7 +125,12 @@ uint8_t const *tud_hid_descriptor_report_cb(uint8_t instance)
 uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t type,
                                uint8_t *buffer, uint16_t reqlen)
 {
-    (void)instance; (void)report_id; (void)type; (void)buffer; (void)reqlen;
+    (void)instance;
+    if (type == HID_REPORT_TYPE_FEATURE && report_id == CTR2_FEATURE_REPORT_ID
+        && reqlen >= CTR2_FEATURE_BYTES) {
+        ctr2_caps_encode(OFFERED_EXTENSIONS, buffer);   // TinyUSB adds the report ID
+        return CTR2_FEATURE_BYTES;
+    }
     return 0;
 }
 
@@ -102,6 +140,14 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
                            uint8_t const *buffer, uint16_t len)
 {
     (void)instance;
+    if (type == HID_REPORT_TYPE_FEATURE) {
+        uint32_t caps;
+        if (report_id == CTR2_FEATURE_REPORT_ID && ctr2_caps_decode(buffer, len, &caps)) {
+            s_accepted_extensions = caps & OFFERED_EXTENSIONS;
+            xTaskNotifyGive(s_radio_task);
+        }
+        return;
+    }
     if (type != HID_REPORT_TYPE_OUTPUT && type != HID_REPORT_TYPE_INVALID)
         return;
     if (report_id == 0 && len == CTR2_REPORT_BYTES + 1 && buffer[0] == CTR2_REPORT_ID) {
@@ -129,6 +175,7 @@ static void usb_event(tinyusb_event_t *event, void *arg)
 {
     (void)arg;
     s_mounted = event->id == TINYUSB_EVENT_ATTACHED;
+    s_accepted_extensions = 0;   // a new host session negotiates afresh
     if (s_radio_task)
         xTaskNotifyGive(s_radio_task);
 }
@@ -227,6 +274,23 @@ static void restart_link(const char *why)
     set_link(LINK_WAITING);
 }
 
+static uint32_t now_ms(void);
+
+// AUDIO_SPECTRUM: [bars N][span Hz hi][span Hz lo][N levels].
+static void store_spectrum(const uint8_t *data, uint16_t len)
+{
+    if (len < 4 || data[0] == 0 || data[0] > CTR2_SPECTRUM_MAX_BARS || len != 3u + data[0])
+        return;
+    model_lock();
+    knob_model_t *m = model_get();
+    m->spectrum_bars = data[0];
+    m->spectrum_span_hz = (data[1] << 8) | data[2];
+    memcpy(m->spectrum, data + 3, data[0]);
+    m->spectrum_ms = now_ms();
+    m->revision++;
+    model_unlock();
+}
+
 static void on_report(const uint8_t r[CTR2_REPORT_BYTES])
 {
     if (r[0] == CTR2_MARKER && r[3] == CTR2_TYPE_HELLO) {
@@ -258,6 +322,8 @@ static void on_report(const uint8_t r[CTR2_REPORT_BYTES])
             flex_api_rx_bytes(data, len);
         } else if (type == CTR2_TYPE_DATAGRAM && s_radio_open && len > 2) {
             flex_api_rx_datagram((uint16_t)((data[0] << 8) | data[1]), data + 2, (size_t)(len - 2));
+        } else if (type == CTR2_EXT_AUDIO_SPECTRUM) {
+            store_spectrum(data, len);
         }
         break;
     case CTR2_RX_ERROR:
@@ -278,6 +344,7 @@ static void radio_task(void *arg)
     bool was_mounted = false;
     for (;;) {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(20));
+        ctr2_rx_set_extensions(&s_link_rx, s_accepted_extensions);
 
         if (s_mounted != was_mounted) {
             was_mounted = s_mounted;

@@ -81,6 +81,7 @@ static bool s_hold_fired;
 static uint32_t s_dial_down_ms;
 static bool s_locked_drawn;
 static knob_model_t s_snap;
+static uint32_t s_tiles_used_ms;     // last tile touch, for the dock's return to the spectrum
 
 // ---------------------------------------------------------------- geometry
 
@@ -306,6 +307,7 @@ static void select_param(knob_param_t p)
 static void tile_event(lv_event_t *e)
 {
     tile_t *t = lv_event_get_user_data(e);
+    s_tiles_used_ms = lv_tick_get();
     if (lv_event_get_code(e) == LV_EVENT_SHORT_CLICKED) {
         select_param(t->param);
     } else if (lv_event_get_code(e) == LV_EVENT_LONG_PRESSED) {
@@ -330,8 +332,8 @@ static void tiles(lv_obj_t *parent)
         t->param = defs[i].p;
         t->toggle = defs[i].toggle;
         t->btn = lv_button_create(parent);
-        lv_obj_set_size(t->btn, 74, 46);
-        lv_obj_align(t->btn, LV_ALIGN_CENTER, (i % 3 - 1) * 80, i < 3 ? -20 : 28);
+        lv_obj_set_size(t->btn, 66, 46);
+        lv_obj_align(t->btn, LV_ALIGN_CENTER, (i % 3 - 1) * 72, i < 3 ? -24 : 24);
         lv_obj_set_style_bg_color(t->btn, COL_TILE, 0);
         lv_obj_set_style_radius(t->btn, 10, 0);
         lv_obj_set_style_shadow_width(t->btn, 0, 0);
@@ -342,6 +344,132 @@ static void tiles(lv_obj_t *parent)
         lv_obj_set_style_text_align(t->label, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_center(t->label);
     }
+}
+
+// ---------------------------------------------------------------- spectrum
+
+// The centre dock shows either the audio spectrum from AetherSDR or the
+// tiles. A tap on the spectrum shows the tiles; they go back to the
+// spectrum after DOCK_TILES_MS unused (unless a tile is on the dial). A
+// sideways swipe switches either way. Without a spectrum the tiles stay.
+#define DOCK_W          212
+#define DOCK_H          96
+#define DOCK_Y          8       // centre offset of the dock
+#define DOCK_TILES_MS   8000
+#define SPECTRUM_STALE_MS 2000
+#define PEAK_DECAY      3       // level units per frame
+
+typedef enum { DOCK_SPECTRUM, DOCK_TILES } dock_view_t;
+
+static lv_obj_t *s_tiles_box, *s_spectrum;
+static dock_view_t s_dock = DOCK_TILES;
+static uint8_t s_bars[64], s_peaks[64];
+static int s_bar_count;
+static uint32_t s_spectrum_seen_ms;   // lv_tick when the last frame arrived
+static uint32_t s_spectrum_stamp;     // model stamp of that frame
+
+static bool spectrum_live(void)
+{
+    return s_bar_count > 0 && lv_tick_get() - s_spectrum_seen_ms < SPECTRUM_STALE_MS;
+}
+
+static void show_dock(dock_view_t view)
+{
+    if (view == DOCK_SPECTRUM && !spectrum_live())
+        view = DOCK_TILES;
+    s_dock = view;
+    lv_obj_set_hidden(s_spectrum, view != DOCK_SPECTRUM);
+    lv_obj_set_hidden(s_tiles_box, view != DOCK_TILES);
+    s_tiles_used_ms = lv_tick_get();
+}
+
+static void spectrum_draw(lv_event_t *e)
+{
+    lv_obj_t *obj = lv_event_get_target(e);
+    lv_layer_t *layer = lv_event_get_layer(e);
+    lv_area_t a;
+    lv_obj_get_coords(obj, &a);
+    const int pad = 10, axis = 18;
+    const int x0 = a.x1 + pad, x1 = a.x2 - pad;
+    const int y_top = a.y1 + pad, y_base = a.y2 - axis;
+    const int h = y_base - y_top;
+    if (s_bar_count <= 0)
+        return;
+    const int slot = (x1 - x0) / s_bar_count;
+    lv_draw_rect_dsc_t bar;
+    lv_draw_rect_dsc_init(&bar);
+    bar.bg_color = COL_SCALE;
+    bar.bg_opa = LV_OPA_COVER;
+    lv_draw_rect_dsc_t peak = bar;
+    peak.bg_color = COL_TEXT;
+    for (int i = 0; i < s_bar_count; ++i) {
+        const int bx = x0 + i * slot;
+        const int level = s_bars[i] * h / 255;
+        lv_area_t r = {bx + 1, y_base - level, bx + slot - 2, y_base};
+        if (level > 0)
+            lv_draw_rect(layer, &bar, &r);
+        const int py = y_base - s_peaks[i] * h / 255;
+        lv_area_t p = {bx + 1, py - 2, bx + slot - 2, py};
+        if (s_peaks[i] > s_bars[i])
+            lv_draw_rect(layer, &peak, &p);
+    }
+}
+
+static void spectrum_event(lv_event_t *e)
+{
+    (void)e;
+    show_dock(DOCK_TILES);
+}
+
+static void spectrum_panel(lv_obj_t *parent)
+{
+    s_spectrum = lv_obj_create(parent);
+    lv_obj_remove_style_all(s_spectrum);
+    lv_obj_set_size(s_spectrum, DOCK_W, DOCK_H);
+    lv_obj_align(s_spectrum, LV_ALIGN_CENTER, 0, DOCK_Y);
+    lv_obj_set_style_radius(s_spectrum, 12, 0);
+    lv_obj_set_style_bg_color(s_spectrum, COL_TRACK, 0);
+    lv_obj_set_style_bg_opa(s_spectrum, LV_OPA_COVER, 0);
+    lv_obj_set_scrollable(s_spectrum, false);
+    lv_obj_add_event_cb(s_spectrum, spectrum_draw, LV_EVENT_DRAW_MAIN_END, NULL);
+    lv_obj_add_event_cb(s_spectrum, spectrum_event, LV_EVENT_SHORT_CLICKED, NULL);
+    // kHz scale along the bottom; 0..4 matches the span AetherSDR sends.
+    for (int k = 0; k <= 4; ++k) {
+        char t[4];
+        snprintf(t, sizeof t, "%d", k);
+        lv_obj_t *l = label(s_spectrum, &lv_font_montserrat_14, COL_TEXT, t);
+        lv_obj_align(l, LV_ALIGN_BOTTOM_LEFT, 6 + k * (DOCK_W - 24) / 4, -1);
+    }
+    lv_obj_set_hidden(s_spectrum, true);
+}
+
+// New frame from the model: copy it and let peaks fall toward the bars.
+static void update_spectrum(const knob_model_t *v)
+{
+    if (v->spectrum_bars <= 0 || v->spectrum_ms == s_spectrum_stamp)
+        return;
+    bool first = s_bar_count == 0;
+    s_spectrum_stamp = v->spectrum_ms;
+    s_spectrum_seen_ms = lv_tick_get();
+    s_bar_count = v->spectrum_bars;
+    for (int i = 0; i < s_bar_count; ++i) {
+        s_bars[i] = v->spectrum[i];
+        int p = s_peaks[i] - PEAK_DECAY;
+        s_peaks[i] = (uint8_t)(s_bars[i] > p ? s_bars[i] : p);
+    }
+    if (first)
+        show_dock(DOCK_SPECTRUM);   // the spectrum is the default once it exists
+    if (s_dock == DOCK_SPECTRUM)
+        lv_obj_invalidate(s_spectrum);
+}
+
+static void dock_tick(void)
+{
+    if (s_dock == DOCK_SPECTRUM && !spectrum_live())
+        show_dock(DOCK_TILES);
+    else if (s_dock == DOCK_TILES && spectrum_live() && s_mode == MODE_TUNE
+             && lv_tick_get() - s_tiles_used_ms >= DOCK_TILES_MS)
+        show_dock(DOCK_SPECTRUM);
 }
 
 // ---------------------------------------------------------------- refresh
@@ -532,6 +660,8 @@ static void refresh(lv_timer_t *timer)
 
     handle_dial(&s_snap);
     const knob_model_t *v = &s_snap;
+    update_spectrum(v);
+    dock_tick();
     int focus = model_focus_slice(v);
     menu_update(v, focus, changed);
     if (!changed)
@@ -571,10 +701,15 @@ static void screen_gesture(lv_event_t *e)
 {
     (void)e;
     lv_indev_t *indev = lv_indev_active();
-    if (lv_indev_get_gesture_dir(indev) == LV_DIR_BOTTOM && !menu_is_open()
-        && s_snap.link == LINK_BOUND) {
+    lv_dir_t dir = lv_indev_get_gesture_dir(indev);
+    if (menu_is_open() || s_snap.link != LINK_BOUND)
+        return;
+    if (dir == LV_DIR_BOTTOM) {
         lv_indev_wait_release(indev);   // the swipe is not also a tile tap
         menu_open();
+    } else if (dir == LV_DIR_LEFT || dir == LV_DIR_RIGHT) {
+        lv_indev_wait_release(indev);
+        show_dock(s_dock == DOCK_TILES ? DOCK_SPECTRUM : DOCK_TILES);
     }
 }
 
@@ -599,10 +734,16 @@ void ui_start(lv_display_t *disp)
     gauge(face, &s_comp, 84, 280, 0.0f, 25.0f, "COMP", "0", "25");
     gauge(face, &s_pwr, 396, 208, 0.0f, 100.0f, "PWR", "0", "100");
     gauge(face, &s_mic, 396, 280, -40.0f, 0.0f, "MIC", "-40", "0");
-    tiles(face);
+    s_tiles_box = lv_obj_create(face);
+    lv_obj_remove_style_all(s_tiles_box);
+    lv_obj_set_size(s_tiles_box, DOCK_W + 4, DOCK_H);
+    lv_obj_align(s_tiles_box, LV_ALIGN_CENTER, 0, DOCK_Y);
+    lv_obj_set_scrollable(s_tiles_box, false);
+    tiles(s_tiles_box);
+    spectrum_panel(face);
 
     s_step_label = label(face, &lv_font_montserrat_14, COL_DIM, "");
-    lv_obj_align(s_step_label, LV_ALIGN_CENTER, 0, 60);
+    lv_obj_align(s_step_label, LV_ALIGN_CENTER, 0, 64);
     s_station_label = label(face, &lv_font_montserrat_20, COL_DIM, "");
     lv_obj_align(s_station_label, LV_ALIGN_CENTER, 0, 110);
 
