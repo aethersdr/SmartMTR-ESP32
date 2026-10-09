@@ -34,34 +34,39 @@ There are two kinds of input, and this document keeps their names apart:
 
 ### Menu
 
-Swipe down anywhere on the face to open it. It shows a scrolling list of
-values for the active slice and the transmitter. It works by touch or by the
-dial alone.
+Swipe down anywhere on the face to open it. It is a scrolling list of values
+for the active slice and the transmitter, and every row can be changed
+without leaving it:
 
-With the dial:
-
-- **Turn** to move the highlight (white outline) from row to row.
-- **Click** a highlighted on/off row to flip it. Click any other row to put it
-  in edit (yellow outline), where turning changes it.
-- **Click while editing:** on a row with a switch (RIT, XIT, Squelch, WNB, APF,
-  Compander, Monitor) it flips the switch; on AGC it steps the mode. On a
-  list row it sends the previewed choice now and leaves edit; on a plain level
-  row it leaves edit.
-- **Click-and-hold** leaves edit, dropping a previewed choice. With nothing in
-  edit, it closes the menu.
+- **Levels** (RIT, filter edges, squelch, NR amount, RF power, …) have a fader.
+- **Lists** (Mode, antennas, Band, NR/ANF mode) have a stepped fader.
+- **On/off settings** have a switch. Rows with both a level and an on/off
+  setting (RIT, XIT, Squelch, WNB, APF, Compander, Monitor) have both.
+- **AGC** has a fader for the amount and a mode button (Off/Slow/Med/Fast).
 
 By touch:
 
-- Tap a row to put it in edit (yellow outline); tap it again to release it.
-- Tap an on/off row (Mute, Diversity, Tune lock, Break-in) to flip it.
-- Touch-and-hold a row that has a level and a switch (RIT, XIT, Squelch, WNB,
-  APF, Compander, Monitor) to flip its switch.
-- **AGC** row: turning the dial sets the amount; touch-and-hold steps the mode
-  Off → Slow → Med → Fast. The amount is the threshold (AGC-T) while AGC
-  runs, and the fixed gain (`agc_off_level`) while it is off, as in SmartSDR.
-  The dock's AGC tile works the same way.
-- For list rows (Mode, antennas, Band, NR/ANF mode), turning the dial
-  previews the choice in yellow. It is sent once the dial rests for 0.7 s.
+- **Swipe** the list up or down to scroll it. A vertical swipe that starts
+  on a fader still scrolls the list.
+- **Drag a fader sideways** to set the value; levels go to the radio as you
+  drag, and a list choice is sent when you lift your finger.
+- **Tap a switch** or the AGC mode button to flip it or step it.
+- **Tap a row** to put it in edit for the dial (yellow outline); tap it again
+  to release it.
+
+With the dial:
+
+- **Turn** to move the highlight (white outline) down or up the list; the
+  list scrolls with it.
+- **Click** to put the highlighted row in edit (yellow outline). Turning then
+  changes it: a level steps, a list previews its next choice in yellow, and
+  an on/off row turns on (clockwise) or off (anticlockwise).
+- **Click while editing:** on a row with a switch it flips the switch, and on
+  AGC it steps the mode; both stay in edit. On any other row it leaves edit,
+  and sends a previewed choice at once. Otherwise a choice is sent when the
+  dial rests for 0.7 s.
+- **Click-and-hold** leaves edit and drops a previewed choice. With nothing
+  in edit, it closes the menu.
 
 To close it, tap the grip at the bottom, swipe up from the grip,
 click-and-hold the dial (with nothing in edit), or leave it for 8 s.
@@ -123,6 +128,7 @@ needs AetherSDR with AetherKnob support (the `AETHER_KNOB` product string).
 | `main/menu_items.c` | Menu rows: keys, ranges, commands (host-tested) |
 | `main/menu.c` | Swipe-down menu screen |
 | `test/` | Host test of the API client (`make -C test check`) |
+| `test/preview/` | Renders the screens on the PC (`make faces`) and drives the menu with a scripted finger and dial (`make touchtest`) |
 | `docs/smartsdr-api-notes.md` | Protocol facts the client relies on, from FlexLib |
 
 ## Status

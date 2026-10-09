@@ -13,7 +13,24 @@
 
 int board_dial_take_detents(void) { return 0; }
 bool board_dial_is_down(void) { return false; }
-void usb_link_post_action(const knob_action_t *a) { (void)a; }
+// Actions the UI posted, for the touch test.
+static knob_action_t s_actions[64];
+static int s_action_count;
+void usb_link_post_action(const knob_action_t *a)
+{
+    if (s_action_count < 64)
+        s_actions[s_action_count++] = *a;
+}
+
+// A scripted finger.
+static lv_point_t s_finger;
+static bool s_finger_down;
+static void finger_read(lv_indev_t *indev, lv_indev_data_t *data)
+{
+    (void)indev;
+    data->point = s_finger;
+    data->state = s_finger_down ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+}
 
 static uint32_t s_fb[480 * 480];
 
@@ -50,6 +67,121 @@ static void run_for(int ms)
         lv_tick_inc(10);
         lv_timer_handler();
     }
+}
+
+// The control of `type` in the menu row labelled `name`.
+static lv_obj_t *find_in_row(lv_obj_t *obj, const char *name, const lv_obj_class_t *type)
+{
+    for (uint32_t i = 0; i < lv_obj_get_child_count(obj); ++i) {
+        lv_obj_t *c = lv_obj_get_child(obj, (int32_t)i);
+        if (lv_obj_check_type(c, &lv_label_class) && strcmp(lv_label_get_text(c), name) == 0) {
+            for (uint32_t j = 0; j < lv_obj_get_child_count(obj); ++j) {
+                lv_obj_t *d = lv_obj_get_child(obj, (int32_t)j);
+                if (lv_obj_check_type(d, type))
+                    return d;
+            }
+        }
+        lv_obj_t *found = find_in_row(c, name, type);
+        if (found)
+            return found;
+    }
+    return NULL;
+}
+
+static lv_point_t centre_of(lv_obj_t *obj)
+{
+    lv_area_t a;
+    lv_obj_get_coords(obj, &a);
+    return (lv_point_t){(a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2};
+}
+
+static void drag(lv_point_t from, int dx, int dy)
+{
+    s_finger = from;
+    s_finger_down = true;
+    run_for(60);
+    for (int k = 1; k <= 10; ++k) {
+        s_finger.x = from.x + dx * k / 10;
+        s_finger.y = from.y + dy * k / 10;
+        run_for(40);
+    }
+    s_finger_down = false;
+    run_for(100);
+}
+
+static int count_kind(knob_action_kind_t kind)
+{
+    int n = 0;
+    for (int i = 0; i < s_action_count; ++i)
+        n += s_actions[i].kind == kind;
+    return n;
+}
+
+#define CHECK(cond, what)                                                       \
+    do {                                                                        \
+        if (!(cond)) {                                                          \
+            fprintf(stderr, "touch test FAILED: %s\n", what);                  \
+            return 1;                                                           \
+        }                                                                       \
+        printf("touch test ok: %s\n", what);                                   \
+    } while (0)
+
+// Drives the open menu with a scripted finger.
+static int touch_test(void)
+{
+    lv_indev_t *finger = lv_indev_create();
+    lv_indev_set_type(finger, LV_INDEV_TYPE_POINTER);
+    lv_indev_set_read_cb(finger, finger_read);
+    menu_open();
+    run_for(400);
+
+    lv_obj_t *rit = find_in_row(lv_screen_active(), "RIT", &lv_slider_class);
+    CHECK(rit != NULL, "RIT row has a fader");
+    lv_obj_t *list = lv_obj_get_parent(lv_obj_get_parent(rit));
+    int before = lv_slider_get_value(rit);
+
+    s_action_count = 0;
+    drag(centre_of(rit), 4, -140);
+    CHECK(lv_obj_get_scroll_y(list) > 40, "a vertical drag starting on a fader scrolls the list");
+    CHECK(count_kind(ACT_MENU_SET_LEVEL) == 0, "...and does not move the fader");
+    CHECK(lv_slider_get_value(rit) == before, "...and the fader shows the radio's value");
+
+    lv_obj_scroll_to_y(list, 0, LV_ANIM_OFF);
+    run_for(100);
+    s_action_count = 0;
+    drag(centre_of(rit), 90, 3);
+    CHECK(count_kind(ACT_MENU_SET_LEVEL) > 0, "a sideways drag on a fader sets the level");
+    knob_action_t last = s_actions[s_action_count - 1];
+    CHECK(last.arg > before && last.arg % 10 == 0, "...upwards, snapped to the 10 Hz step");
+
+    lv_obj_t *sq = find_in_row(lv_screen_active(), "Squelch", &lv_switch_class);
+    CHECK(sq != NULL, "Squelch row has a switch");
+    lv_obj_scroll_to_view(lv_obj_get_parent(sq), LV_ANIM_OFF);
+    run_for(100);
+    s_action_count = 0;
+    drag(centre_of(sq), 0, 0);
+    CHECK(count_kind(ACT_MENU_SET_SWITCH) == 1 && s_actions[0].arg == 1, "tapping a switch turns it on");
+
+    // Dial only: the highlight starts on Mode. Click edits it, turning
+    // previews the next mode without sending, a click sends it.
+    menu_close();
+    run_for(400);
+    menu_open();
+    run_for(400);
+    s_action_count = 0;
+    menu_dial_click();
+    menu_dial_turn(1);
+    run_for(100);
+    CHECK(s_action_count == 0, "dial: turning a list row in edit only previews");
+    menu_dial_click();
+    CHECK(count_kind(ACT_MENU_CHOOSE) == 1 && s_actions[0].arg == 2, "dial: a click sends the previewed mode (AM)");
+    menu_dial_click();                  // Mode into edit again
+    menu_dial_turn(2);                  // preview
+    run_for(100);
+    menu_dial_hold();                   // back out
+    run_for(1000);                      // past the rest time that would send it
+    CHECK(count_kind(ACT_MENU_CHOOSE) == 1, "dial: click-and-hold drops a preview instead of sending it");
+    return 0;
 }
 
 int main(int argc, char **argv)
@@ -109,6 +241,8 @@ int main(int argc, char **argv)
     lv_display_set_buffers(d, buf, NULL, sizeof buf, LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(d, flush);
     ui_start(d);
+    if (strcmp(state, "touchtest") == 0)
+        return touch_test();
     if (strncmp(state, "menu", 4) == 0) {
         menu_open();
         run_for(400);

@@ -128,6 +128,19 @@ static void test_menu(void)
     expect_sent("|slice set 2 agc_threshold=65\n");
     expect_text("AGC", "Slow  65");
 
+    // Faders and switches send absolute values, clamped to the row's range.
+    act(ACT_MENU_SET_LEVEL, "RF power", 37);
+    expect_sent("|transmit set rfpower=37\n");
+    act(ACT_MENU_SET_LEVEL, "RF power", 150);
+    expect_sent("|transmit set rfpower=100\n");
+    act(ACT_MENU_SET_SWITCH, "Mute", 1);
+    expect_sent("|slice set 2 audio_mute=1\n");
+    act(ACT_MENU_SET_SWITCH, "Squelch", 0);
+    expect_sent("|slice set 2 squelch=0\n");
+    expect_text("Squelch", "Off  20");
+    act(ACT_MENU_SET_LEVEL, "Filter high", 2400);
+    expect_sent("|filt 2 50 2400\n");
+
     act(ACT_MENU_ADJUST, "Mic gain", 1);
     expect_sent("|transmit set miclevel=41\n");
     act(ACT_MENU_TOGGLE, "Monitor", 0);
@@ -147,7 +160,7 @@ static void test_menu(void)
 
     // USB passband cannot go below 0 Hz (FlexLib UpdateFilter).
     act(ACT_MENU_ADJUST, "Filter low", -20);
-    expect_sent("|filt 2 0 2850\n");
+    expect_sent("|filt 2 0 2400\n");
     act(ACT_MENU_ADJUST, "Filter high", -100);         // cannot cross the low edge
     expect_sent("|filt 2 0 50\n");
 

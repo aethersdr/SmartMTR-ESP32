@@ -662,6 +662,12 @@ static bool menu_action(knob_model_t *m, int n, const knob_action_t *a)
     case ACT_MENU_CHOOSE:
         count = valid_item(a->item) ? menu_choose(a->item, n, m, a->arg, cmds) : 0;
         break;
+    case ACT_MENU_SET_LEVEL:
+        count = valid_item(a->item) ? menu_set_level(a->item, n, m, a->arg, cmds) : 0;
+        break;
+    case ACT_MENU_SET_SWITCH:
+        count = valid_item(a->item) ? menu_set_switch(a->item, n, m, a->arg != 0, cmds) : 0;
+        break;
     case ACT_SET_TX: {
         int t = a->arg;
         bool ours = t >= 0 && t < KNOB_MAX_SLICES && m->slices[t].in_use

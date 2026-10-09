@@ -14,6 +14,9 @@ faces: preview
 	./preview menu_tx.ppm menu_tx && magick menu_tx.ppm menu_tx.png
 	rm -f *.ppm
 
+touchtest: preview
+	./preview /dev/null touchtest
+
 clean:
 	rm -f preview *.ppm *.png
-.PHONY: faces clean
+.PHONY: faces touchtest clean

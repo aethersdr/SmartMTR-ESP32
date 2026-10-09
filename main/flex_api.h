@@ -31,6 +31,8 @@ typedef enum {
     ACT_MENU_ADJUST,   // item, arg: detents
     ACT_MENU_TOGGLE,   // item
     ACT_MENU_CHOOSE,   // item, arg: choice index
+    ACT_MENU_SET_LEVEL,   // item, arg: absolute value (a fader)
+    ACT_MENU_SET_SWITCH,  // item, arg: 0/1 (a switch)
     ACT_SET_TX,        // arg: slice index that gets the TX flag
 } knob_action_kind_t;
 

@@ -200,6 +200,17 @@ static const char *level_key(const menu_item_t *it, const knob_kv_t *kv)
 }
 
 static int level_value(const menu_item_t *it, const knob_slice_t *s, const knob_model_t *m,
+                       bool *known);
+
+bool menu_item_level(const menu_item_t *it, const knob_slice_t *s, const knob_model_t *m,
+                     int *value)
+{
+    bool known;
+    *value = level_value(it, s, m, &known);
+    return known;
+}
+
+static int level_value(const menu_item_t *it, const knob_slice_t *s, const knob_model_t *m,
                        bool *known)
 {
     *known = true;
@@ -473,24 +484,21 @@ static bool clamp_filter(const knob_slice_t *s, int pitch, int *lo, int *hi)
     return *hi - *lo >= 50;
 }
 
-int menu_adjust(int item, int slice, knob_model_t *m, int detents, menu_cmds_t out)
+int menu_set_level(int item, int slice, knob_model_t *m, int value, menu_cmds_t out)
 {
     const menu_item_t *it = &g_menu_items[item];
     knob_slice_t *s = &m->slices[slice];
     char v[16];
     if (it->special == SPECIAL_FILTER_LO || it->special == SPECIAL_FILTER_HI) {
-        int lo = s->filter_lo, hi = s->filter_hi;
         // Moving one edge never pushes the other.
-        if (it->special == SPECIAL_FILTER_LO) {
-            lo += detents * it->step;
-            if (lo > hi - 50)
-                lo = hi - 50;
-        } else {
-            hi += detents * it->step;
-            if (hi < lo + 50)
-                hi = lo + 50;
-        }
+        int lo = s->filter_lo, hi = s->filter_hi;
+        if (it->special == SPECIAL_FILTER_LO)
+            lo = value > hi - 50 ? hi - 50 : value;
+        else
+            hi = value < lo + 50 ? lo + 50 : value;
         if (!clamp_filter(s, kv_get_int(&m->tx_kv, "pitch"), &lo, &hi))
+            return 0;
+        if (lo == s->filter_lo && hi == s->filter_hi)
             return 0;
         s->filter_lo = lo;
         s->filter_hi = hi;
@@ -503,8 +511,7 @@ int menu_adjust(int item, int slice, knob_model_t *m, int detents, menu_cmds_t o
         int on = one_of_active(owner, kv);
         if (on < 0 || !owner->levels[on])
             return 0;
-        int nv = clampi(kv_get_int(kv, owner->levels[on]) + detents * it->step, it->min, it->max);
-        snprintf(v, sizeof v, "%d", nv);
+        snprintf(v, sizeof v, "%d", clampi(value, it->min, it->max));
         kv_put(kv, owner->levels[on], v);
         set_cmd(owner, slice, owner->set_levels[on], v, out[0]);
         return 1;
@@ -513,7 +520,7 @@ int menu_adjust(int item, int slice, knob_model_t *m, int detents, menu_cmds_t o
         return 0;
     knob_kv_t *kv = kv_mut(it, m, slice);
     const char *key = level_key(it, kv);
-    int nv = clampi(kv_get_int(kv, key) + detents * it->step, it->min, it->max);
+    int nv = clampi(value, it->min, it->max);
     snprintf(v, sizeof v, "%d", nv);
     kv_put(kv, key, v);
     if (key == it->key && streq(key, "agc_threshold"))
@@ -522,7 +529,17 @@ int menu_adjust(int item, int slice, knob_model_t *m, int detents, menu_cmds_t o
     return 1;
 }
 
-int menu_toggle(int item, int slice, knob_model_t *m, menu_cmds_t out)
+int menu_adjust(int item, int slice, knob_model_t *m, int detents, menu_cmds_t out)
+{
+    const menu_item_t *it = &g_menu_items[item];
+    int value;
+    if (!menu_item_level(it, &m->slices[slice], m, &value)
+        && it->special == SPECIAL_LEVEL_OF_ONE_OF)
+        return 0;                            // no variant on: nothing to adjust
+    return menu_set_level(item, slice, m, value + detents * it->step, out);
+}
+
+int menu_set_switch(int item, int slice, knob_model_t *m, bool on, menu_cmds_t out)
 {
     const menu_item_t *it = &g_menu_items[item];
     knob_kv_t *kv = kv_mut(it, m, slice);
@@ -533,7 +550,22 @@ int menu_toggle(int item, int slice, knob_model_t *m, menu_cmds_t out)
     } else if (it->kind == ITEM_LEVEL_TOGGLE) {
         status = it->enable_key;
         command = cmd_key(it->set_enable_key, it->enable_key);
-    } else if (it->kind == ITEM_LEVEL_CYCLE) {
+    } else {
+        return 0;
+    }
+    kv_put(kv, status, on ? "1" : "0");
+    if (it->special == SPECIAL_LOCK)
+        snprintf(out[0], MENU_CMD_LEN, "slice %s %d", on ? "lock" : "unlock", slice);
+    else
+        set_cmd(it, slice, command, on ? "1" : "0", out[0]);
+    return 1;
+}
+
+int menu_toggle(int item, int slice, knob_model_t *m, menu_cmds_t out)
+{
+    const menu_item_t *it = &g_menu_items[item];
+    knob_kv_t *kv = kv_mut(it, m, slice);
+    if (it->kind == ITEM_LEVEL_CYCLE) {
         // Next option, wrapping: off -> slow -> med -> fast -> off.
         int c = cycle_index(it, kv) + 1;    // unknown (-1) starts at options[0]
         if (!it->options[c])
@@ -544,16 +576,8 @@ int menu_toggle(int item, int slice, knob_model_t *m, menu_cmds_t out)
             snprintf(m->slices[slice].agc_mode, sizeof m->slices[slice].agc_mode, "%s", next);
         set_cmd(it, slice, it->cycle_key, next, out[0]);
         return 1;
-    } else {
-        return 0;
     }
-    bool on = !kv_get_int(kv, status);
-    kv_put(kv, status, on ? "1" : "0");
-    if (it->special == SPECIAL_LOCK)
-        snprintf(out[0], MENU_CMD_LEN, "slice %s %d", on ? "lock" : "unlock", slice);
-    else
-        set_cmd(it, slice, command, on ? "1" : "0", out[0]);
-    return 1;
+    return menu_set_switch(item, slice, m, !menu_item_on(it, &m->slices[slice], m), out);
 }
 
 int menu_choose(int item, int slice, knob_model_t *m, int choice, menu_cmds_t out)

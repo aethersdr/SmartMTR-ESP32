@@ -83,6 +83,10 @@ bool menu_item_visible(const menu_item_t *it, const knob_slice_t *s);
 // Display text for a row's value ("" when unknown).
 void menu_item_text(const menu_item_t *it, const knob_slice_t *s, const knob_model_t *m,
                     char *buf, size_t cap);
+// A level row's current value (for its fader); false when unknown.
+bool menu_item_level(const menu_item_t *it, const knob_slice_t *s, const knob_model_t *m,
+                     int *value);
+
 // Whether a toggle / level-toggle row is on (drives the row's highlight).
 bool menu_item_on(const menu_item_t *it, const knob_slice_t *s, const knob_model_t *m);
 
@@ -100,6 +104,9 @@ int menu_choice_current(const menu_item_t *it, const knob_slice_t *s, const knob
 typedef char menu_cmds_t[MENU_MAX_CMDS][MENU_CMD_LEN];
 
 int menu_adjust(int item, int slice, knob_model_t *m, int detents, menu_cmds_t out);
+int menu_set_level(int item, int slice, knob_model_t *m, int value, menu_cmds_t out);
+// Flips a switch (TOGGLE, LEVEL_TOGGLE) or steps a LEVEL_CYCLE row's mode.
 int menu_toggle(int item, int slice, knob_model_t *m, menu_cmds_t out);
+int menu_set_switch(int item, int slice, knob_model_t *m, bool on, menu_cmds_t out);
 int menu_choose(int item, int slice, knob_model_t *m, int choice, menu_cmds_t out);
 int menu_set_tx_slice(int slice, knob_model_t *m, menu_cmds_t out);
