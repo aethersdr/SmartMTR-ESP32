@@ -59,7 +59,7 @@ typedef struct {
     lv_obj_t *btn;
     lv_obj_t *label;
     knob_param_t param;
-    knob_action_kind_t toggle;   // long-press action
+    knob_action_kind_t toggle;   // touch-and-hold action
     const char *name;
     bool on, selected;           // last drawn state
 } tile_t;
@@ -287,7 +287,7 @@ static void gauge_set(gauge_t *g, float v)
 static void select_param(knob_param_t p)
 {
     if (s_mode == MODE_PARAM && s_param == p) {
-        s_mode = MODE_TUNE;               // tap the selected tile again: back to VFO
+        s_mode = MODE_TUNE;               // tap the selected tile again: dial tunes again
     } else {
         s_mode = MODE_PARAM;
         s_param = p;
@@ -309,7 +309,7 @@ static void tile_event(lv_event_t *e)
 static void tiles(lv_obj_t *parent)
 {
     static const struct { const char *name; knob_param_t p; knob_action_kind_t toggle; } defs[] = {
-        {"AF", PARAM_AF, ACT_AGC_NEXT},       // AF has no toggle; long-press does AGC mode
+        {"AF", PARAM_AF, ACT_AGC_NEXT},       // AF has no toggle; touch-and-hold steps AGC mode
         {"AGC", PARAM_AGC_T, ACT_AGC_NEXT},
         {"FILT", PARAM_FILTER_WIDTH, ACT_STEP_NEXT},
         {"NR", PARAM_NR_LEVEL, ACT_TOGGLE_NR},
@@ -461,17 +461,17 @@ static int other_slice(const knob_model_t *m, int focus)
     return -1;
 }
 
-static void handle_knob(const knob_model_t *m)
+static void handle_dial(const knob_model_t *m)
 {
-    int detents = board_knob_take_detents();
-    bool down = board_knob_pressed();
-    bool pressed = down && !s_btn_was_down;
+    int detents = board_dial_take_detents();
+    bool down = board_dial_is_down();
+    bool clicked = down && !s_btn_was_down;
     s_btn_was_down = down;
     if (menu_is_open()) {
         if (detents)
-            menu_knob_turn(detents);
-        if (pressed)
-            menu_knob_press();
+            menu_dial_turn(detents);
+        if (clicked)
+            menu_dial_click();
         return;
     }
     if (detents) {
@@ -480,9 +480,9 @@ static void handle_knob(const knob_model_t *m)
             : (knob_action_t){.kind = ACT_ADJUST, .param = s_param, .arg = detents};
         usb_link_post_action(&a);
     }
-    if (pressed) {
+    if (clicked) {
         if (s_mode == MODE_PARAM) {
-            s_mode = MODE_TUNE;           // push leaves parameter mode
+            s_mode = MODE_TUNE;           // a dial click leaves parameter mode
             s_seen_revision = UINT32_MAX;
         } else if (m->link == LINK_BOUND) {
             knob_action_t a = {.kind = ACT_STEP_NEXT};
@@ -503,7 +503,7 @@ static void refresh(lv_timer_t *timer)
     }
     model_unlock();
 
-    handle_knob(&s_snap);
+    handle_dial(&s_snap);
     const knob_model_t *v = &s_snap;
     int focus = model_focus_slice(v);
     menu_update(v, focus, changed);

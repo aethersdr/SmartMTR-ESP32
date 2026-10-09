@@ -35,21 +35,21 @@ static const char *TAG = "board";
 #define PCF_TP_INT      (1u << 2)
 #define PCF_LCD_POWER   (1u << 3)
 #define PCF_LCD_RST     (1u << 4)
-#define PCF_KNOB_BTN    (1u << 5)   // input: written high, reads low when pressed
+#define PCF_DIAL_CLICK  (1u << 5)   // input: written high, reads low while the dial is clicked down
 
 #define TOUCH_ADDR      0x15
 #define LCD_SIZE        480
 
-// Quadrature edges per mechanical detent; tune on hardware if one click
-// moves the VFO by more or less than one step.
-#define KNOB_COUNTS_PER_DETENT 4
+// Quadrature edges per mechanical detent; tune on hardware if one detent
+// of turning moves the VFO by more or less than one step.
+#define DIAL_COUNTS_PER_DETENT 4
 
 static i2c_master_bus_handle_t s_i2c;
 static i2c_master_dev_handle_t s_pcf;
 static i2c_master_dev_handle_t s_touch;
 static pcnt_unit_handle_t s_pcnt;
 static uint8_t s_pcf_out;
-static int s_knob_residue;
+static int s_dial_residue;
 
 static esp_err_t pcf_write(uint8_t value)
 {
@@ -113,7 +113,7 @@ static const st7701_lcd_init_cmd_t s_lcd_init[] = {
 static void power_sequence(void)
 {
     // Elecrow's order: LCD power, LCD reset pulse, touch reset pulse, INT high.
-    pcf_write(PCF_KNOB_BTN | PCF_TP_RST | PCF_LCD_RST);
+    pcf_write(PCF_DIAL_CLICK | PCF_TP_RST | PCF_LCD_RST);
     pcf_set(PCF_LCD_POWER, true);
     vTaskDelay(pdMS_TO_TICKS(50));
     pcf_set(PCF_LCD_RST, false);
@@ -257,23 +257,23 @@ static void knob_init(void)
     ESP_ERROR_CHECK(pcnt_unit_start(s_pcnt));
 }
 
-int board_knob_take_detents(void)
+int board_dial_take_detents(void)
 {
     int count = 0;
     pcnt_unit_get_count(s_pcnt, &count);
     pcnt_unit_clear_count(s_pcnt);
-    s_knob_residue += count;
-    int detents = s_knob_residue / KNOB_COUNTS_PER_DETENT;
-    s_knob_residue -= detents * KNOB_COUNTS_PER_DETENT;
+    s_dial_residue += count;
+    int detents = s_dial_residue / DIAL_COUNTS_PER_DETENT;
+    s_dial_residue -= detents * DIAL_COUNTS_PER_DETENT;
     return detents;
 }
 
-bool board_knob_pressed(void)
+bool board_dial_is_down(void)
 {
     uint8_t in = 0xFF;
     if (i2c_master_receive(s_pcf, &in, 1, 20) != ESP_OK)
         return false;
-    return (in & PCF_KNOB_BTN) == 0;
+    return (in & PCF_DIAL_CLICK) == 0;
 }
 
 lv_display_t *board_init(void)

@@ -1,7 +1,7 @@
 # AetherKnob
 
 A FlexRadio controller on the **Elecrow CrowPanel 2.1" HMI ESP32 Rotary
-Display** (DHE03921D: ESP32-S3R8, 480×480 round IPS touch screen, push knob).
+Display** (DHE03921D: ESP32-S3R8, 480×480 round IPS touch screen, rotary dial that also clicks).
 The face is modelled on [SmartMTR](https://smartmtr.net/): S-meter arcs for two
 slices, SWR/COMP/PWR/MIC needles, and the frequency readout, with a dock of touch
 tiles in the middle.
@@ -14,14 +14,20 @@ so the knob is an independent SmartSDR API client. It binds to the AetherSDR
 
 ## Controls
 
+There are two kinds of input, and this document keeps their names apart:
+
+- **On the screen:** **tap** (a short touch), **touch-and-hold**, and **swipe**.
+- **On the dial:** **turn** it, one **detent** at a time, and **click** it (push it
+  down until it clicks).
+
 | Input | Action |
 | --- | --- |
-| Turn knob | Tune the active slice by its step |
-| Press knob | Next tuning step (10 Hz → 10 kHz); in parameter mode, back to tuning |
-| Tap a tile | Knob adjusts that parameter (yellow outline); tap again for tuning |
-| Long-press NR / NB / ANF | Toggle it on or off |
-| Long-press AGC or AF | Cycle AGC mode (off/slow/med/fast) |
-| Long-press FILT | Next tuning step |
+| Turn the dial | Tune the active slice by its step |
+| Click the dial | Next tuning step (10 Hz → 10 kHz); in parameter mode, back to tuning |
+| Tap a tile | Turning the dial adjusts that parameter (yellow outline); tap it again to tune |
+| Touch-and-hold NR / NB / ANF | Toggle it on or off |
+| Touch-and-hold AGC or AF | Step AGC mode (off/slow/med/fast) |
+| Touch-and-hold FILT | Next tuning step |
 | Tap a slice's **TX** label | Make that slice the transmit slice (grey = not TX, red outline = TX, filled = on air) |
 | Swipe down | Open the menu (below) |
 
@@ -30,20 +36,20 @@ so the knob is an independent SmartSDR API client. It binds to the AetherSDR
 Swipe down anywhere on the face to open it. It shows a scrolling list of
 values for the active slice and the transmitter:
 
-- Tap a row to put it on the knob (yellow outline); tap it again to release it.
-- With no row selected, the knob scrolls the list.
+- Tap a row to put it on the dial (yellow outline); tap it again to release it.
+- With no row selected, turning the dial scrolls the list.
 - Tap an on/off row (Mute, Diversity, Tune lock, Break-in) to flip it.
-- Long-press a row that has a level and a switch (RIT, XIT, Squelch, WNB, APF,
-  Compander, Monitor) to flip its switch.
-- **AGC** row: the knob sets the amount; long-press steps the mode
+- Touch-and-hold a row that has a level and a switch (RIT, XIT, Squelch, WNB,
+  APF, Compander, Monitor) to flip its switch.
+- **AGC** row: turning the dial sets the amount; touch-and-hold steps the mode
   Off → Slow → Med → Fast. The amount is the threshold (AGC-T) while AGC
   runs, and the fixed gain (`agc_off_level`) while it is off, as in SmartSDR.
   The dock's AGC tile works the same way.
-- For list rows (Mode, antennas, Band, NR/ANF mode), the knob
-  previews the choice in yellow. It is sent once the knob rests for 0.7 s.
+- For list rows (Mode, antennas, Band, NR/ANF mode), turning the dial
+  previews the choice in yellow. It is sent once the dial rests for 0.7 s.
 
-To close it, tap the grip at the bottom, swipe up from the grip, press the
-knob, or leave it for 8 s.
+To close it, tap the grip at the bottom, swipe up from the grip, click the
+dial, or leave it for 8 s.
 
 Rows:
 
@@ -56,7 +62,7 @@ Rows:
 Nothing in the menu keys the transmitter. VOX and TUNE are deliberately left
 out. To add a row, add one entry to the table in `main/menu_items.c`.
 
-Tiles: **AF** (audio level), **AGC** (threshold), **FILT** (width, 50 Hz per click,
+Tiles: **AF** (audio level), **AGC** (threshold), **FILT** (width, 50 Hz per detent,
 about the passband centre), and **NR / NB / ANF** (level).
 
 ## Build and flash
@@ -94,7 +100,7 @@ needs AetherSDR with AetherKnob support (the `AETHER_KNOB` product string).
 
 | Path | What |
 | --- | --- |
-| `main/board.c` | Display (ST7701S over 3-wire SPI + RGB), touch, knob (PCNT), PCF8574 |
+| `main/board.c` | Display (ST7701S over 3-wire SPI + RGB), touch, dial turn (PCNT) and click (PCF8574) |
 | `main/usb_link.c` | TinyUSB vendor HID, device side of CTR2 link v0, radio task |
 | `main/ctr2_link.{c,h}` | Link framing, MIT, copied from AetherSDR `tools/ctr2-firmware-reference` |
 | `main/flex_api.c` | SmartSDR API client: bind, slices, commands, VITA-49 meters |
@@ -114,6 +120,6 @@ What is tested:
 Not yet verified on hardware:
 
 - Display bring-up.
-- Encoder counts per detent (`KNOB_COUNTS_PER_DETENT` in `board.c`).
+- Encoder counts per detent (`DIAL_COUNTS_PER_DETENT` in `board.c`).
 - Touch orientation.
 - Meters over the relay's UDP path. No CTR2 has exercised that path on hardware yet.

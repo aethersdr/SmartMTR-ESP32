@@ -1,7 +1,7 @@
 // Swipe-down menu: a scrolling list of every row in menu_items.c for the
-// focus slice and the transmitter. Tap a row to put it on the knob, tap a
-// toggle to flip it, long-press a level row with a switch to flip the switch.
-// Closes on a swipe up from the grip, a knob press, or 8 s without use.
+// focus slice and the transmitter. Tap a row to put it on the dial, tap a
+// toggle to flip it, touch-and-hold a level row with a switch to flip the
+// switch. Closes on a tap or swipe up on the grip, a dial click, or 8 s idle.
 #pragma once
 
 #include "lvgl.h"
@@ -18,6 +18,6 @@ bool menu_is_open(void);
 // Called by the UI refresh: the model snapshot and the focus slice (-1: none).
 void menu_update(const knob_model_t *m, int focus, bool model_changed);
 
-// Knob input while the menu is open.
-void menu_knob_turn(int detents);
-void menu_knob_press(void);
+// Dial input while the menu is open: turning, and clicking.
+void menu_dial_turn(int detents);
+void menu_dial_click(void);

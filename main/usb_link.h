@@ -10,5 +10,5 @@
 void usb_link_start(void);
 
 // Queues a control action for the radio task. Safe from any task; drops the
-// action if the queue is full (the knob is turning faster than USB drains).
+// action if the queue is full (the dial is turning faster than USB drains).
 void usb_link_post_action(const knob_action_t *action);

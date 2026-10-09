@@ -18,7 +18,7 @@
 
 #define ROW_HEIGHT      46
 #define IDLE_CLOSE_MS   8000
-#define CHOICE_SEND_MS  700    // a previewed choice is sent once the knob rests this long
+#define CHOICE_SEND_MS  700    // a previewed choice is sent once the dial rests this long
 
 typedef struct {
     lv_obj_t *row;
@@ -34,7 +34,7 @@ static bool s_open;
 static int s_selected = -1;
 static int s_pending = -1;           // previewed choice index, -1 when none
 static uint32_t s_pending_ms;
-static uint32_t s_knob_ms;
+static uint32_t s_dial_ms;
 static const knob_model_t *s_model;
 static int s_focus = -1;
 
@@ -257,7 +257,7 @@ void menu_open(void)
     s_open = true;
     s_selected = -1;
     s_pending = -1;
-    s_knob_ms = now_ms();
+    s_dial_ms = now_ms();
     lv_obj_scroll_to_y(s_list, 0, LV_ANIM_OFF);
     draw_title();
     for (int i = 0; i < g_menu_item_count; ++i)
@@ -294,8 +294,8 @@ void menu_update(const knob_model_t *m, int focus, bool model_changed)
         draw_row(sel);
     }
     uint32_t idle = lv_display_get_inactive_time(NULL);
-    if (now - s_knob_ms < idle)
-        idle = now - s_knob_ms;
+    if (now - s_dial_ms < idle)
+        idle = now - s_dial_ms;
     if (idle >= IDLE_CLOSE_MS || m->link != LINK_BOUND) {
         menu_close();
         return;
@@ -307,9 +307,9 @@ void menu_update(const knob_model_t *m, int focus, bool model_changed)
     }
 }
 
-void menu_knob_turn(int detents)
+void menu_dial_turn(int detents)
 {
-    s_knob_ms = now_ms();
+    s_dial_ms = now_ms();
     if (s_selected < 0) {
         lv_obj_scroll_by_bounded(s_list, 0, -detents * (ROW_HEIGHT + 6), LV_ANIM_ON);
         return;
@@ -323,15 +323,15 @@ void menu_knob_turn(int detents)
         if (cur < 0)
             cur = 0;
         s_pending = ((cur + detents) % n + n) % n;
-        s_pending_ms = s_knob_ms;
+        s_pending_ms = s_dial_ms;
         draw_row(s_selected);
     } else {
         post(ACT_MENU_ADJUST, s_selected, detents);
     }
 }
 
-void menu_knob_press(void)
+void menu_dial_click(void)
 {
-    s_knob_ms = now_ms();
+    s_dial_ms = now_ms();
     menu_close();
 }

@@ -21,12 +21,12 @@ typedef enum {
 
 typedef enum {
     ITEM_HEADER,        // section title, not adjustable
-    ITEM_LEVEL,         // integer in [min, max]; the knob steps it
+    ITEM_LEVEL,         // integer in [min, max]; turning the dial steps it
     ITEM_TOGGLE,        // 0/1; a tap flips it
-    ITEM_LEVEL_TOGGLE,  // level on the knob, 0/1 enable on long-press
-    ITEM_CHOICE,        // one value from a list; the knob previews, sent at rest
+    ITEM_LEVEL_TOGGLE,  // level on the dial, 0/1 enable on touch-and-hold
+    ITEM_CHOICE,        // one value from a list; the dial previews, sent at rest
     ITEM_ONE_OF,        // which one of several 0/1 keys is on, or none ("Off")
-    ITEM_LEVEL_CYCLE,   // level on the knob; long-press steps `cycle_key`
+    ITEM_LEVEL_CYCLE,   // level on the dial; touch-and-hold steps `cycle_key`
                         // through `options`. At options[0] the level is
                         // `first_level_key` instead of `key` (AGC off level).
 } item_kind_t;
@@ -91,7 +91,7 @@ int menu_choice_current(const menu_item_t *it, const knob_slice_t *s, const knob
 
 // Command builders. Each writes up to MENU_MAX_CMDS commands (without the
 // `C<seq>|` prefix) into out, applies the new value to the model at once so
-// the screen follows the knob, and returns how many commands it wrote.
+// the screen follows the dial, and returns how many commands it wrote.
 #define MENU_MAX_CMDS 6
 #define MENU_CMD_LEN  96
 typedef char menu_cmds_t[MENU_MAX_CMDS][MENU_CMD_LEN];

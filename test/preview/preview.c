@@ -11,8 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-int board_knob_take_detents(void) { return 0; }
-bool board_knob_pressed(void) { return false; }
+int board_dial_take_detents(void) { return 0; }
+bool board_dial_is_down(void) { return false; }
 void usb_link_post_action(const knob_action_t *a) { (void)a; }
 
 static uint32_t s_fb[480 * 480];
@@ -114,7 +114,7 @@ int main(int argc, char **argv)
         run_for(400);
         int rows = strcmp(state, "menu_tx") == 0 ? 9 : strcmp(state, "menu_mid") == 0 ? 3 : 0;
         if (rows) {
-            menu_knob_turn(rows);       // clockwise: down the list
+            menu_dial_turn(rows);       // clockwise: down the list
             run_for(600);
         }
     }

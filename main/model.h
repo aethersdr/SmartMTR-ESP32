@@ -76,6 +76,6 @@ void model_lock(void);
 void model_unlock(void);
 knob_model_t *model_get(void);  // caller holds the lock
 
-// Index of the slice the knob drives: the bound client's active slice, else
+// Index of the slice the dial drives: the bound client's active slice, else
 // its lowest-numbered one; -1 when it has none.
 int model_focus_slice(const knob_model_t *m);

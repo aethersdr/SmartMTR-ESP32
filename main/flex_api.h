@@ -21,9 +21,9 @@ typedef enum {
 } knob_param_t;
 
 typedef enum {
-    ACT_TUNE,          // arg: encoder detents, signed
+    ACT_TUNE,          // arg: dial detents, signed
     ACT_STEP_NEXT,     // next entry in the slice's step_list
-    ACT_ADJUST,        // param, arg: detents, signed
+    ACT_ADJUST,        // param, arg: dial detents, signed
     ACT_TOGGLE_NR,
     ACT_TOGGLE_NB,
     ACT_TOGGLE_ANF,

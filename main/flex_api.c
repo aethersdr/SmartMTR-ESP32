@@ -15,7 +15,7 @@
 #define MAX_METERS       192
 #define PING_MS          1000
 #define UDP_REGISTER_MS  250    // repeated until the first Flex VITA packet lands
-#define TUNE_MIN_GAP_MS  40     // coalesce knob detents into one tune command
+#define TUNE_MIN_GAP_MS  40     // coalesce dial detents into one tune command
 #define NO_CARRIER_WATTS 0.0011f
 
 typedef enum { ROLE_NONE, ROLE_LEVEL, ROLE_FWD, ROLE_SWR, ROLE_MIC, ROLE_COMP } meter_role_t;

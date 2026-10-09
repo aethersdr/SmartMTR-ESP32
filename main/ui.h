@@ -1,5 +1,5 @@
 // SmartMTR-style round face: S-meter arcs for two slices, TX needles, the
-// frequency readout and a dock of touch tiles that pick what the knob turns.
+// frequency readout and a dock of touch tiles that pick what turning the dial changes.
 #pragma once
 
 #include "lvgl.h"
