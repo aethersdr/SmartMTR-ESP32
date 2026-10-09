@@ -276,16 +276,18 @@ static void restart_link(const char *why)
 
 static uint32_t now_ms(void);
 
-// AUDIO_SPECTRUM: [bars N][span Hz hi][span Hz lo][N levels].
+// AUDIO_SPECTRUM: [bars N][low Hz hi][low Hz lo][span Hz hi][span Hz lo][N levels].
 static void store_spectrum(const uint8_t *data, uint16_t len)
 {
-    if (len < 4 || data[0] == 0 || data[0] > CTR2_SPECTRUM_MAX_BARS || len != 3u + data[0])
+    if (len <= CTR2_SPECTRUM_HEADER || data[0] == 0 || data[0] > CTR2_SPECTRUM_MAX_BARS
+        || len != CTR2_SPECTRUM_HEADER + data[0])
         return;
     model_lock();
     knob_model_t *m = model_get();
     m->spectrum_bars = data[0];
-    m->spectrum_span_hz = (data[1] << 8) | data[2];
-    memcpy(m->spectrum, data + 3, data[0]);
+    m->spectrum_low_hz = (data[1] << 8) | data[2];
+    m->spectrum_span_hz = (data[3] << 8) | data[4];
+    memcpy(m->spectrum, data + CTR2_SPECTRUM_HEADER, data[0]);
     m->spectrum_ms = now_ms();
     m->revision++;
     model_unlock();

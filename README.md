@@ -90,7 +90,9 @@ DSP, AetherSDR's noise reduction and its RX chain up to and including the EQ.
 While transmitting it shows your transmit audio in red, across the TX filter
 width. Otherwise it spans 0 Hz to the active slice's filter width, so a 600 Hz CW filter shows
 0–600 Hz and a 6 kHz SSB filter 0–6 kHz (at most 12 kHz, the limit of the
-24 kHz audio). The scale relabels itself to match. **Tap** it to show the tiles below instead; they return to the
+24 kHz audio). Bar heights are in dB, and the bars are spaced
+logarithmically in frequency like an audio analyser, starting from a low edge
+of about a sixtieth of the span. The scale relabels itself to match. **Tap** it to show the tiles below instead; they return to the
 spectrum after 8 s unused, unless a tile is on the dial. A **sideways
 swipe** switches either way. Without a spectrum the tiles stay.
 

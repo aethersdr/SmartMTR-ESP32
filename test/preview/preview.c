@@ -7,6 +7,8 @@
 #include "../../main/ui.h"
 #include "../../main/usb_link.h"
 
+#include <math.h>
+#include "../../main/ctr2_link.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,6 +55,28 @@ static void slice(knob_slice_t *s, char letter, double mhz, const char *mode, in
     snprintf(s->mode, sizeof s->mode, "%s", mode);
     snprintf(s->agc_mode, sizeof s->agc_mode, "med");
     snprintf(s->rxant, sizeof s->rxant, "ANT2");
+}
+
+// Speech through a ~3 kHz SSB filter, sampled at each bar's centre on the
+// log axis AetherSDR uses (bar edges from ctr2_spectrum_band_edge).
+static void voice_spectrum(knob_model_t *m, int low, int span)
+{
+    m->spectrum_bars = 32;
+    m->spectrum_low_hz = low;
+    m->spectrum_span_hz = span;
+    for (int i = 0; i < 32; ++i) {
+        float f = sqrtf(ctr2_spectrum_band_edge(low, span, 32, i)
+                        * ctr2_spectrum_band_edge(low, span, 32, i + 1));
+        float db = -78.0f;                                    // noise floor
+        if (f > 150.0f && f < 2900.0f) {
+            db = -30.0f - 9.0f * fabsf(log2f(f / 450.0f)) * (f > 450.0f ? 0.6f : 1.6f);
+            db += 3.0f * sinf((float)i * 1.7f);              // formant ripple
+        }
+        if (f >= 2900.0f)
+            db = -62.0f - (f - 2900.0f) / 120.0f;             // filter skirt
+        float level = (db + 90.0f) * 255.0f / 90.0f;
+        m->spectrum[i] = (uint8_t)(level < 0 ? 0 : level > 255 ? 255 : level);
+    }
 }
 
 static void put(knob_kv_t *kv, bool slice, const char *key, const char *value)
@@ -279,13 +303,7 @@ int main(int argc, char **argv)
         put(&m->tx_kv, false, "compander_level", "60");
         put(&m->tx_kv, false, "sb_monitor", "0");
         put(&m->tx_kv, false, "mon_gain_sb", "50");
-        // A speech-like spectrum: energy 300-2800 Hz, falling off above.
-        static const uint8_t speech[32] = {60, 110, 150, 170, 160, 175, 150, 140, 155, 145, 150, 160,
-                                           150, 130, 140, 135, 145, 150, 160, 140, 150, 145, 120, 60,
-                                           30, 20, 15, 12, 10, 8, 8, 6};
-        memcpy(m->spectrum, speech, sizeof speech);
-        m->spectrum_bars = 32;
-        m->spectrum_span_hz = 4000;
+        voice_spectrum(m, 66, 4000);
         m->spectrum_ms = 1;
     }
     m->revision = 1;
@@ -312,7 +330,7 @@ int main(int argc, char **argv)
     }
     int span = strcmp(state, "span600") == 0 ? 600 : strcmp(state, "span12k") == 0 ? 12000 : 0;
     if (span) {
-        m->spectrum_span_hz = span;
+        voice_spectrum(m, span == 600 ? 20 : 100, span);
         m->spectrum_ms += 10;
         m->revision++;
         run_for(100);

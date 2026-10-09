@@ -74,6 +74,7 @@ typedef struct {
     // CTR2_SPECTRUM_FLOOR_DB..0 dBFS; bars split 0..spectrum_span_hz.
     uint8_t spectrum[64];
     int spectrum_bars;         // 0 until the first frame
+    int spectrum_low_hz;       // > 0: bars log-spaced from here to the span; 0: linear
     int spectrum_span_hz;
     uint32_t spectrum_ms;      // when it last arrived
     uint32_t revision;         // bumped on every change; the UI redraws on change

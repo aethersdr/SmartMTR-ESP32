@@ -367,8 +367,8 @@ static dock_view_t s_dock = DOCK_TILES;
 static uint8_t s_bars[64], s_peaks[64];
 static int s_bar_count;
 static bool s_spectrum_tx;            // bars drawn in the TX colour (transmit audio)
-static int s_span_hz;                 // what the axis is labelled for
-#define AXIS_LABELS 5
+static int s_span_hz, s_low_hz;       // what the axis is labelled for
+#define AXIS_LABELS 7
 static lv_obj_t *s_axis[AXIS_LABELS];
 static lv_obj_t *s_axis_unit;
 static uint32_t s_spectrum_seen_ms;   // lv_tick when the last frame arrived
@@ -428,39 +428,70 @@ static void spectrum_draw(lv_event_t *e)
     }
 }
 
-// Labels 0..span on a clean step (100/200/250/500 Hz, 1/2/2.5/5 kHz) with at
-// most four intervals, each centred where that frequency falls on the bars;
-// the unit goes in the panel's top-right corner.
-static void label_axis(int span)
+// Fraction of the bar area across at frequency hz: log from low to span,
+// or linear from 0 when low is 0.
+static float axis_fraction(int low, int span, int hz)
 {
-    static const int steps[] = {100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000};
-    int step = steps[0];
-    for (size_t i = 0; i < sizeof steps / sizeof steps[0]; ++i) {
-        step = steps[i];
-        if (span / step <= 4)
-            break;
-    }
-    const bool khz = step >= 1000;
+    if (low > 0 && span > low)
+        return logf((float)hz / (float)low) / logf((float)span / (float)low);
+    return span > 0 ? (float)hz / (float)span : 0.0f;
+}
+
+// Ticks on a 1-2-5 sequence (log axis) or a clean step (linear), each centred
+// where its frequency falls on the bars; "Hz" goes in the top-right corner.
+static void label_axis(int low, int span)
+{
     const int pad = 10, w = DOCK_W - 2 * pad;
-    int ticks = span / step + 1;
-    if (ticks > AXIS_LABELS)
-        ticks = AXIS_LABELS;
+    int ticks[AXIS_LABELS], count = 0;
+    if (low > 0) {
+        // Decades first (10, 100, 1k, 10k), then 2s and 5s wherever they keep
+        // MIN_TICK_GAP clear of every tick already placed: the low end of a
+        // log axis is crowded.
+        enum { MIN_TICK_GAP = 30 };
+        static const int decades[] = {10, 100, 1000, 10000};
+        static const int fills[] = {20, 50, 200, 500, 2000, 5000, 20000};
+        const int *passes[2] = {decades, fills};
+        const size_t lens[2] = {sizeof decades / sizeof decades[0], sizeof fills / sizeof fills[0]};
+        for (int p = 0; p < 2; ++p) {
+            for (size_t i = 0; i < lens[p] && count < AXIS_LABELS; ++i) {
+                const int hz = passes[p][i];
+                if (hz < low || hz > span)
+                    continue;
+                const float x = axis_fraction(low, span, hz) * (float)w;
+                bool clear = true;
+                for (int j = 0; j < count; ++j)
+                    clear = clear && fabsf(x - axis_fraction(low, span, ticks[j]) * (float)w) >= MIN_TICK_GAP;
+                if (clear)
+                    ticks[count++] = hz;
+            }
+        }
+    } else {
+        static const int steps[] = {100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000};
+        int step = steps[0];
+        for (size_t i = 0; i < sizeof steps / sizeof steps[0]; ++i) {
+            step = steps[i];
+            if (span / step <= 4)
+                break;
+        }
+        for (int hz = 0; hz <= span && count < AXIS_LABELS; hz += step)
+            ticks[count++] = hz;
+    }
     for (int i = 0; i < AXIS_LABELS; ++i) {
         lv_obj_t *l = s_axis[i];
-        if (i >= ticks) {
+        if (i >= count) {
             lv_obj_set_hidden(l, true);
             continue;
         }
-        const int hz = i * step;
+        const int hz = ticks[i];
         char t[12];
-        if (khz && hz % 1000)
-            snprintf(t, sizeof t, "%d.%d", hz / 1000, hz % 1000 / 100);
-        else if (khz)
-            snprintf(t, sizeof t, "%d", hz / 1000);
+        if (hz >= 1000 && hz % 1000)
+            snprintf(t, sizeof t, "%d.%dk", hz / 1000, hz % 1000 / 100);
+        else if (hz >= 1000)
+            snprintf(t, sizeof t, "%dk", hz / 1000);
         else
             snprintf(t, sizeof t, "%d", hz);
         ui_set_text(l, t);
-        int x = pad + (int)((long)hz * w / span) - 20;   // centred on its frequency
+        int x = pad + (int)(axis_fraction(low, span, hz) * (float)w) - 20;
         if (x < 0)
             x = 0;
         if (x > DOCK_W - 40)
@@ -468,7 +499,7 @@ static void label_axis(int span)
         lv_obj_align(l, LV_ALIGN_BOTTOM_LEFT, x, -1);
         lv_obj_set_hidden(l, false);
     }
-    ui_set_text(s_axis_unit, khz ? "kHz" : "Hz");
+    ui_set_text(s_axis_unit, "Hz");
 }
 
 static void spectrum_event(lv_event_t *e)
@@ -516,9 +547,12 @@ static void update_spectrum(const knob_model_t *v)
         s_live_since_ms = lv_tick_get();   // a new run of frames starts
     s_spectrum_stamp = v->spectrum_ms;
     s_spectrum_seen_ms = lv_tick_get();
-    if (v->spectrum_span_hz > 0 && v->spectrum_span_hz != s_span_hz) {
+    if (v->spectrum_span_hz > 0
+        && (v->spectrum_span_hz != s_span_hz || v->spectrum_low_hz != s_low_hz)) {
         s_span_hz = v->spectrum_span_hz;
-        label_axis(s_span_hz);
+        s_low_hz = v->spectrum_low_hz;
+        label_axis(s_low_hz, s_span_hz);
+        memset(s_peaks, 0, sizeof s_peaks);   // old peaks belong to other frequencies
     }
     s_bar_count = v->spectrum_bars;
     for (int i = 0; i < s_bar_count; ++i) {
