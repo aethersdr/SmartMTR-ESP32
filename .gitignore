@@ -4,3 +4,6 @@ dependencies.lock
 sdkconfig
 sdkconfig.old
 host_test
+test/preview/preview
+test/preview/*.ppm
+test/preview/*.png

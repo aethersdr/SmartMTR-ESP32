@@ -26,7 +26,7 @@
 // S-meter geometry: S0..S9 fill 60% of the arc, S9..S9+60 the rest.
 #define ARC_RADIUS    222
 #define ARC_WIDTH     20
-#define ARC_SPAN      130          // degrees
+#define ARC_SPAN      116          // degrees
 #define TOP_START     (270 - ARC_SPAN / 2)
 #define BOTTOM_START  (90 + ARC_SPAN / 2)   // runs anticlockwise, S1 on the left
 
@@ -38,7 +38,6 @@ typedef struct {
     lv_obj_t *freq;
     lv_obj_t *mode;
     lv_obj_t *filter;
-    lv_obj_t *ant;
     lv_obj_t *tx;
     bool top;
 } slice_view_t;
@@ -176,20 +175,19 @@ static void slice_view(lv_obj_t *parent, slice_view_t *v, bool top)
     lv_obj_set_style_arc_rounded(v->peak, false, LV_PART_INDICATOR);
     meter_scale(parent, top);
 
-    const int dir = top ? 1 : -1;
-    v->freq = label(parent, top ? &lv_font_montserrat_48 : &lv_font_montserrat_28, COL_TEXT, "--.---.---");
-    lv_obj_align(v->freq, LV_ALIGN_CENTER, 0, dir * -98);
+    // Offsets from the centre. The top block reads mode, frequency, filter
+    // downwards; the bottom block mirrors it.
+    v->freq = label(parent, top ? &lv_font_montserrat_40 : &lv_font_montserrat_28, COL_TEXT, "--.---.---");
+    lv_obj_align(v->freq, LV_ALIGN_CENTER, 0, top ? -92 : 110);
     v->mode = label(parent, &lv_font_montserrat_20, COL_TEXT, "");
-    lv_obj_align(v->mode, LV_ALIGN_CENTER, -14, dir * (top ? -142 : -130));
+    lv_obj_align(v->mode, LV_ALIGN_CENTER, 0, top ? -134 : 142);
     v->tx = label(parent, &lv_font_montserrat_14, COL_LEVEL, "TX");
     lv_obj_set_style_border_width(v->tx, 1, 0);
     lv_obj_set_style_border_color(v->tx, COL_LEVEL, 0);
     lv_obj_set_style_pad_hor(v->tx, 4, 0);
-    lv_obj_align_to(v->tx, v->mode, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
+    lv_obj_set_hidden(v->tx, true);
     v->filter = label(parent, &lv_font_montserrat_20, COL_DIM, "");
-    lv_obj_align(v->filter, LV_ALIGN_CENTER, 0, dir * (top ? -62 : -72));
-    v->ant = label(parent, &lv_font_montserrat_14, COL_SCALE, "");
-    lv_obj_align(v->ant, LV_ALIGN_CENTER, top ? -150 : -120, dir * -98);
+    lv_obj_align(v->filter, LV_ALIGN_CENTER, 0, top ? -54 : 82);
 }
 
 static void gauge(lv_obj_t *parent, gauge_t *g, int cx, int cy, float lo, float hi,
@@ -214,8 +212,9 @@ static void gauge(lv_obj_t *parent, gauge_t *g, int cx, int cy, float lo, float 
     lv_obj_set_style_line_color(g->needle, COL_LEVEL, 0);
     lv_obj_set_style_line_rounded(g->needle, true, 0);
 
-    lv_obj_t *n = label(parent, &lv_font_montserrat_14, COL_DIM, name);
-    lv_obj_align(n, LV_ALIGN_TOP_LEFT, cx - 22, cy + 30);
+    // The name sits inside the dial, below the hub where the needle never goes.
+    lv_obj_t *n = label(parent, &lv_font_montserrat_14, COL_TEXT, name);
+    lv_obj_align(n, LV_ALIGN_CENTER, cx - CX, cy - CY + 17);
     lv_obj_t *l = label(parent, &lv_font_montserrat_14, COL_DIM, lo_text);
     lv_obj_align(l, LV_ALIGN_TOP_LEFT, cx - 44, cy + 6);
     lv_obj_t *h = label(parent, &lv_font_montserrat_14, COL_DIM, hi_text);
@@ -275,7 +274,7 @@ static void tiles(lv_obj_t *parent)
         t->toggle = defs[i].toggle;
         t->btn = lv_button_create(parent);
         lv_obj_set_size(t->btn, 74, 46);
-        lv_obj_align(t->btn, LV_ALIGN_CENTER, (i % 3 - 1) * 80, i < 3 ? -26 : 26);
+        lv_obj_align(t->btn, LV_ALIGN_CENTER, (i % 3 - 1) * 80, i < 3 ? -20 : 28);
         lv_obj_set_style_bg_color(t->btn, COL_TILE, 0);
         lv_obj_set_style_radius(t->btn, 10, 0);
         lv_obj_set_style_shadow_width(t->btn, 0, 0);
@@ -304,7 +303,6 @@ static void show_slice(slice_view_t *v, const knob_slice_t *s, bool transmitting
         lv_label_set_text(v->freq, v->top ? "--.---.---" : "");
         lv_label_set_text(v->mode, "");
         lv_label_set_text(v->filter, "");
-        lv_label_set_text(v->ant, "");
         lv_obj_set_hidden(v->tx, true);
         return;
     }
@@ -317,10 +315,10 @@ static void show_slice(slice_view_t *v, const knob_slice_t *s, bool transmitting
     format_freq(buf, sizeof buf, s->freq_mhz);
     lv_label_set_text(v->freq, buf);
     lv_label_set_text_fmt(v->mode, "%c  %s", s->letter, s->mode);
-    lv_label_set_text_fmt(v->filter, "%d-%d", s->filter_lo, s->filter_hi);
-    lv_label_set_text(v->ant, s->rxant);
+    lv_label_set_text_fmt(v->filter, "%d-%d  %s", s->filter_lo, s->filter_hi, s->rxant);
     if (s->tx) {
         lv_obj_set_hidden(v->tx, false);
+        lv_obj_align_to(v->tx, v->mode, LV_ALIGN_OUT_LEFT_MID, -10, 0);
         lv_obj_set_style_bg_opa(v->tx, transmitting ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
         lv_obj_set_style_bg_color(v->tx, COL_LEVEL, 0);
         lv_obj_set_style_text_color(v->tx, transmitting ? COL_TEXT : COL_LEVEL, 0);
@@ -376,7 +374,7 @@ static const char *status_text(link_state_t link)
     case LINK_NO_HOST:
         return "AetherKnob\n\nPlug into the PC running\nAetherSDR";
     case LINK_WAITING:
-        return "Waiting for AetherSDR\n\nCTR2 Proxy applet:\nMode USB, pick AETHER_KNOB,\npress Start";
+        return "Waiting for AetherSDR\n\nCTR2 Proxy applet:\nMode USB, pick AetherKnob,\npress Start";
     case LINK_RADIO:
         return "Radio connected\n\nWaiting for a SmartSDR\nor AetherSDR station";
     default:
@@ -442,14 +440,12 @@ static void refresh(lv_timer_t *timer)
     const knob_slice_t *fs = focus >= 0 ? &v->slices[focus] : NULL;
     show_slice(&s_top, fs, v->transmitting);
     show_slice(&s_bottom, other >= 0 ? &v->slices[other] : NULL, v->transmitting);
-    show_tiles(fs);
-
-    if (fs && s_mode == MODE_TUNE)
-        lv_label_set_text_fmt(s_step_label, "STEP %d Hz", fs->step);
-    else if (fs)
-        lv_label_set_text(s_step_label, "KNOB: PARAMETER");
+    if (fs)
+        lv_label_set_text_fmt(s_step_label, s_mode == MODE_TUNE ? "STEP %d Hz" : "KNOB ADJUSTS", fs->step);
     else
         lv_label_set_text(s_step_label, "");
+    show_tiles(fs);
+
     lv_label_set_text(s_station_label, other < 0 && bound ? v->gui_station : "");
 
     gauge_set(&s_swr, v->swr < 1.0f ? 1.0f : v->swr);
@@ -475,16 +471,16 @@ void ui_start(lv_display_t *disp)
 
     slice_view(face, &s_top, true);
     slice_view(face, &s_bottom, false);
-    gauge(face, &s_swr, 84, 205, 1.0f, 3.0f, "SWR", "1", "3");
-    gauge(face, &s_comp, 84, 290, 0.0f, 25.0f, "COMP", "0", "25");
-    gauge(face, &s_pwr, 396, 205, 0.0f, 100.0f, "PWR", "0", "100");
-    gauge(face, &s_mic, 396, 290, -40.0f, 0.0f, "MIC", "-40", "0");
+    gauge(face, &s_swr, 84, 208, 1.0f, 3.0f, "SWR", "1", "3");
+    gauge(face, &s_comp, 84, 280, 0.0f, 25.0f, "COMP", "0", "25");
+    gauge(face, &s_pwr, 396, 208, 0.0f, 100.0f, "PWR", "0", "100");
+    gauge(face, &s_mic, 396, 280, -40.0f, 0.0f, "MIC", "-40", "0");
     tiles(face);
 
     s_step_label = label(face, &lv_font_montserrat_14, COL_DIM, "");
-    lv_obj_align(s_step_label, LV_ALIGN_CENTER, 0, 64);
+    lv_obj_align(s_step_label, LV_ALIGN_CENTER, 0, 60);
     s_station_label = label(face, &lv_font_montserrat_20, COL_DIM, "");
-    lv_obj_align(s_station_label, LV_ALIGN_CENTER, 0, 100);
+    lv_obj_align(s_station_label, LV_ALIGN_CENTER, 0, 110);
 
     s_status_panel = lv_obj_create(scr);
     lv_obj_remove_style_all(s_status_panel);
