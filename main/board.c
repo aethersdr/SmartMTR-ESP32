@@ -43,6 +43,10 @@ static const char *TAG = "board";
 // Quadrature edges per mechanical detent; tune on hardware if one detent
 // of turning moves the VFO by more or less than one step.
 #define DIAL_COUNTS_PER_DETENT 4
+// +1 or -1: which way the quadrature count runs for a clockwise turn. On
+// this board the A/B wiring counts down clockwise, so it is flipped here and
+// everything above sees clockwise as positive.
+#define DIAL_DIRECTION (-1)
 
 static i2c_master_bus_handle_t s_i2c;
 static i2c_master_dev_handle_t s_pcf;
@@ -265,7 +269,7 @@ int board_dial_take_detents(void)
     int count = 0;
     pcnt_unit_get_count(s_pcnt, &count);
     pcnt_unit_clear_count(s_pcnt);
-    s_dial_residue += count;
+    s_dial_residue += DIAL_DIRECTION * count;
     int detents = s_dial_residue / DIAL_COUNTS_PER_DETENT;
     s_dial_residue -= detents * DIAL_COUNTS_PER_DETENT;
     return detents;
