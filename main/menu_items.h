@@ -26,6 +26,9 @@ typedef enum {
     ITEM_LEVEL_TOGGLE,  // level on the knob, 0/1 enable on long-press
     ITEM_CHOICE,        // one value from a list; the knob previews, sent at rest
     ITEM_ONE_OF,        // which one of several 0/1 keys is on, or none ("Off")
+    ITEM_LEVEL_CYCLE,   // level on the knob; long-press steps `cycle_key`
+                        // through `options`. At options[0] the level is
+                        // `first_level_key` instead of `key` (AGC off level).
 } item_kind_t;
 
 typedef enum {
@@ -46,6 +49,8 @@ typedef struct {
     const char *key;              // status key
     const char *set_key;          // command key; NULL = same as key
     const char *enable_key;       // LEVEL_TOGGLE status key
+    const char *cycle_key;        // LEVEL_CYCLE status and command key
+    const char *first_level_key;  // LEVEL_CYCLE level key at options[0]
     const char *set_enable_key;   // NULL = same as enable_key
     int min, max, step;
     const char *list_key;         // CHOICE: status key holding a comma list

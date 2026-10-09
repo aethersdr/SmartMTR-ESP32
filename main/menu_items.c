@@ -42,8 +42,11 @@ const menu_item_t g_menu_items[] = {
      .special = SPECIAL_FILTER_LO, .format = FMT_HZ, .modes = "!FM,NFM"},
     {.label = "Filter high", .kind = ITEM_LEVEL, .min = -12000, .max = 12000, .step = 50,
      .special = SPECIAL_FILTER_HI, .format = FMT_HZ, .modes = "!FM,NFM"},
-    {.label = "AGC mode", .kind = ITEM_CHOICE, .key = "agc_mode", .options = k_agc,
-     .option_labels = k_agc_labels},
+    // AGC-T is the threshold while AGC runs and the fixed gain while it is
+    // off, as SmartSDR and AetherSDR's AGC-T knob (#5384) treat it.
+    {.label = "AGC", .kind = ITEM_LEVEL_CYCLE, .key = "agc_threshold", .cycle_key = "agc_mode",
+     .first_level_key = "agc_off_level", .options = k_agc, .option_labels = k_agc_labels,
+     .min = 0, .max = 100, .step = 1},
     {.label = "Squelch", .kind = ITEM_LEVEL_TOGGLE, .key = "squelch_level",
      .enable_key = "squelch", .min = 0, .max = 100, .step = 1},
     [ROW_NR_MODE] = {.label = "NR mode", .kind = ITEM_ONE_OF, .options = k_nr_status,
@@ -120,6 +123,10 @@ const char *menu_tracked_key(bool slice_object, const char *key)
             return it->enable_key;
         if (streq(it->list_key, key))
             return it->list_key;
+        if (streq(it->cycle_key, key))
+            return it->cycle_key;
+        if (streq(it->first_level_key, key))
+            return it->first_level_key;
         if (it->kind == ITEM_ONE_OF) {
             const char *k = match_list(it->options, key);
             if (k)
@@ -166,6 +173,24 @@ static int one_of_active(const menu_item_t *it, const knob_kv_t *kv)
     return -1;
 }
 
+// Index of the LEVEL_CYCLE row's current option, or -1.
+static int cycle_index(const menu_item_t *it, const knob_kv_t *kv)
+{
+    const char *cur = kv ? kv_get(kv, it->cycle_key) : "";
+    for (int i = 0; it->options[i]; ++i)
+        if (strcmp(it->options[i], cur) == 0)
+            return i;
+    return -1;
+}
+
+// The key a level row adjusts right now.
+static const char *level_key(const menu_item_t *it, const knob_kv_t *kv)
+{
+    if (it->kind == ITEM_LEVEL_CYCLE && it->first_level_key && cycle_index(it, kv) == 0)
+        return it->first_level_key;
+    return it->key;
+}
+
 static int level_value(const menu_item_t *it, const knob_slice_t *s, const knob_model_t *m,
                        bool *known)
 {
@@ -189,8 +214,9 @@ static int level_value(const menu_item_t *it, const knob_slice_t *s, const knob_
     }
     default: {
         const knob_kv_t *kv = kv_of(it, s, m);
-        *known = kv && kv_get(kv, it->key)[0];
-        return kv ? kv_get_int(kv, it->key) : 0;
+        const char *key = level_key(it, kv);
+        *known = kv && kv_get(kv, key)[0];
+        return kv ? kv_get_int(kv, key) : 0;
     }
     }
 }
@@ -314,6 +340,8 @@ bool menu_item_on(const menu_item_t *it, const knob_slice_t *s, const knob_model
         return kv_get_int(kv, it->enable_key) != 0;
     case ITEM_ONE_OF:
         return one_of_active(it, kv) >= 0;
+    case ITEM_LEVEL_CYCLE:
+        return cycle_index(it, kv) > 0;
     default:
         return false;
     }
@@ -367,7 +395,8 @@ void menu_item_text(const menu_item_t *it, const knob_slice_t *s, const knob_mod
         return;
     }
     case ITEM_LEVEL:
-    case ITEM_LEVEL_TOGGLE: {
+    case ITEM_LEVEL_TOGGLE:
+    case ITEM_LEVEL_CYCLE: {
         bool known;
         int v = level_value(it, s, m, &known);
         if (!known) {
@@ -376,9 +405,12 @@ void menu_item_text(const menu_item_t *it, const knob_slice_t *s, const knob_mod
         }
         char level[24];
         format_level(it, v, level, sizeof level);
-        if (it->kind == ITEM_LEVEL_TOGGLE)
+        if (it->kind == ITEM_LEVEL_TOGGLE) {
             snprintf(buf, cap, "%s  %s", menu_item_on(it, s, m) ? "On" : "Off", level);
-        else
+        } else if (it->kind == ITEM_LEVEL_CYCLE) {
+            int c = cycle_index(it, kv_of(it, s, m));
+            snprintf(buf, cap, "%s  %s", c >= 0 ? it->option_labels[c] : "?", level);
+        } else
             snprintf(buf, cap, "%s", level);
         return;
     }
@@ -469,13 +501,16 @@ int menu_adjust(int item, int slice, knob_model_t *m, int detents, menu_cmds_t o
         set_cmd(owner, slice, owner->set_levels[on], v, out[0]);
         return 1;
     }
-    if (it->kind != ITEM_LEVEL && it->kind != ITEM_LEVEL_TOGGLE)
+    if (it->kind != ITEM_LEVEL && it->kind != ITEM_LEVEL_TOGGLE && it->kind != ITEM_LEVEL_CYCLE)
         return 0;
     knob_kv_t *kv = kv_mut(it, m, slice);
-    int nv = clampi(kv_get_int(kv, it->key) + detents * it->step, it->min, it->max);
+    const char *key = level_key(it, kv);
+    int nv = clampi(kv_get_int(kv, key) + detents * it->step, it->min, it->max);
     snprintf(v, sizeof v, "%d", nv);
-    kv_put(kv, it->key, v);
-    set_cmd(it, slice, cmd_key(it->set_key, it->key), v, out[0]);
+    kv_put(kv, key, v);
+    if (key == it->key && streq(key, "agc_threshold"))
+        s->agc_threshold = nv;               // the dock's AGC tile reads this
+    set_cmd(it, slice, key == it->key ? cmd_key(it->set_key, it->key) : key, v, out[0]);
     return 1;
 }
 
@@ -490,6 +525,17 @@ int menu_toggle(int item, int slice, knob_model_t *m, menu_cmds_t out)
     } else if (it->kind == ITEM_LEVEL_TOGGLE) {
         status = it->enable_key;
         command = cmd_key(it->set_enable_key, it->enable_key);
+    } else if (it->kind == ITEM_LEVEL_CYCLE) {
+        // Next option, wrapping: off -> slow -> med -> fast -> off.
+        int c = cycle_index(it, kv) + 1;    // unknown (-1) starts at options[0]
+        if (!it->options[c])
+            c = 0;
+        const char *next = it->options[c];
+        kv_put(kv, it->cycle_key, next);
+        if (streq(it->cycle_key, "agc_mode") && slice_scope(it))
+            snprintf(m->slices[slice].agc_mode, sizeof m->slices[slice].agc_mode, "%s", next);
+        set_cmd(it, slice, it->cycle_key, next, out[0]);
+        return 1;
     } else {
         return 0;
     }
@@ -539,8 +585,6 @@ int menu_choose(int item, int slice, knob_model_t *m, int choice, menu_cmds_t ou
         snprintf(s->mode, sizeof s->mode, "%.7s", v);
     if (streq(it->key, "rxant"))
         snprintf(s->rxant, sizeof s->rxant, "%.7s", v);
-    if (streq(it->key, "agc_mode"))
-        snprintf(s->agc_mode, sizeof s->agc_mode, "%.7s", v);
     set_cmd(it, slice, cmd_key(it->set_key, it->key), v, out[0]);
     return 1;
 }

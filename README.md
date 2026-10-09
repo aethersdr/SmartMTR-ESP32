@@ -35,7 +35,11 @@ values for the active slice and the transmitter:
 - Tap an on/off row (Mute, Diversity, Tune lock, Break-in) to flip it.
 - Long-press a row that has a level and a switch (RIT, XIT, Squelch, WNB, APF,
   Compander, Monitor) to flip its switch.
-- For list rows (Mode, antennas, Band, AGC mode, NR/ANF mode), the knob
+- **AGC** row: the knob sets the amount; long-press steps the mode
+  Off → Slow → Med → Fast. The amount is the threshold (AGC-T) while AGC
+  runs, and the fixed gain (`agc_off_level`) while it is off, as in SmartSDR.
+  The dock's AGC tile works the same way.
+- For list rows (Mode, antennas, Band, NR/ANF mode), the knob
   previews the choice in yellow. It is sent once the knob rests for 0.7 s.
 
 To close it, tap the grip at the bottom, swipe up from the grip, press the
@@ -43,7 +47,7 @@ knob, or leave it for 8 s.
 
 Rows:
 
-- **Receive:** Mode, RX antenna, Band, RIT, Filter low/high, AGC mode,
+- **Receive:** Mode, RX antenna, Band, RIT, Filter low/high, AGC (mode and amount),
   Squelch, NR mode (NR/NRL/NRS/RNN/NRF) and amount, ANF mode (ANF/ANFL/ANFT)
   and amount, WNB, APF (CW only), Mute, Pan, Diversity, DAX channel, Tune lock.
 - **Transmit:** RF power, Tune power, Mic gain, Compander, Monitor, TX antenna,

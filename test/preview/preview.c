@@ -74,6 +74,8 @@ int main(int argc, char **argv)
         put(kv, true, "rit_on", "1");
         put(kv, true, "rit_freq", "-120");
         put(kv, true, "agc_mode", "med");
+        put(kv, true, "agc_threshold", "65");
+        put(kv, true, "agc_off_level", "40");
         put(kv, true, "squelch", "0");
         put(kv, true, "squelch_level", "20");
         put(kv, true, "nrl", "1");
@@ -110,8 +112,9 @@ int main(int argc, char **argv)
     if (strncmp(state, "menu", 4) == 0) {
         menu_open();
         run_for(400);
-        if (strcmp(state, "menu_tx") == 0) {
-            menu_knob_turn(9);          // clockwise: down the list to TRANSMIT
+        int rows = strcmp(state, "menu_tx") == 0 ? 9 : strcmp(state, "menu_mid") == 0 ? 3 : 0;
+        if (rows) {
+            menu_knob_turn(rows);       // clockwise: down the list
             run_for(600);
         }
     }

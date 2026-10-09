@@ -104,6 +104,30 @@ static void test_menu(void)
     expect_sent("|slice set 2 speex_nr=0\n");
     expect_text("NR amount", "-");
 
+    // AGC: knob sets the threshold while AGC runs, the off level while off;
+    // long-press steps off -> slow -> med -> fast -> off.
+    feed("S5A0B1C2D|slice 2 agc_mode=med agc_threshold=65 agc_off_level=40\n");
+    expect_text("AGC", "Med  65");
+    act(ACT_MENU_ADJUST, "AGC", 2);
+    expect_sent("|slice set 2 agc_threshold=67\n");
+    act(ACT_MENU_TOGGLE, "AGC", 0);
+    expect_sent("|slice set 2 agc_mode=fast\n");
+    act(ACT_MENU_TOGGLE, "AGC", 0);
+    expect_sent("|slice set 2 agc_mode=off\n");
+    assert(strcmp(m->slices[2].agc_mode, "off") == 0);
+    expect_text("AGC", "Off  40");
+    act(ACT_MENU_ADJUST, "AGC", -5);
+    expect_sent("|slice set 2 agc_off_level=35\n");
+    knob_action_t tile = {.kind = ACT_ADJUST, .param = PARAM_AGC_T, .arg = 1};
+    flex_api_action(&tile);                              // dock tile follows the mode
+    expect_sent("|slice set 2 agc_off_level=36\n");
+    act(ACT_MENU_TOGGLE, "AGC", 0);
+    expect_sent("|slice set 2 agc_mode=slow\n");
+    tile.arg = -2;
+    flex_api_action(&tile);
+    expect_sent("|slice set 2 agc_threshold=65\n");
+    expect_text("AGC", "Slow  65");
+
     act(ACT_MENU_ADJUST, "Mic gain", 1);
     expect_sent("|transmit set miclevel=41\n");
     act(ACT_MENU_TOGGLE, "Monitor", 0);

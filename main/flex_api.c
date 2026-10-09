@@ -586,8 +586,21 @@ static void adjust(knob_model_t *m, int n, knob_slice_t *s, knob_param_t p, int 
         send_cmd("slice set %d audio_level=%d", n, s->audio_level);
         break;
     case PARAM_AGC_T:
-        s->agc_threshold = clampi(s->agc_threshold + detents, 0, 100);
-        send_cmd("slice set %d agc_threshold=%d", n, s->agc_threshold);
+        if (streq(s->agc_mode, "off")) {
+            // AGC off: AGC-T is the fixed gain (agc_off_level), as in SmartSDR.
+            const char *key = menu_tracked_key(true, "agc_off_level");
+            int level = clampi(kv_get_int(&s->kv, "agc_off_level") + detents, 0, 100);
+            char v[8];
+            snprintf(v, sizeof v, "%d", level);
+            kv_put(&s->kv, key, v);
+            send_cmd("slice set %d agc_off_level=%d", n, level);
+        } else {
+            s->agc_threshold = clampi(s->agc_threshold + detents, 0, 100);
+            char v[8];
+            snprintf(v, sizeof v, "%d", s->agc_threshold);
+            kv_put(&s->kv, menu_tracked_key(true, "agc_threshold"), v);
+            send_cmd("slice set %d agc_threshold=%d", n, s->agc_threshold);
+        }
         break;
     case PARAM_NR_LEVEL:
         s->nr_level = clampi(s->nr_level + detents, 0, 100);
@@ -710,6 +723,7 @@ void flex_api_action(const knob_action_t *a)
         while (i < 4 && !streq(modes[i], s->agc_mode))
             ++i;
         copy_str(s->agc_mode, sizeof s->agc_mode, modes[(i + 1) % 4]);
+        kv_put(&s->kv, menu_tracked_key(true, "agc_mode"), s->agc_mode);
         send_cmd("slice set %d agc_mode=%s", n, s->agc_mode);
         bump(m);
         break;

@@ -126,7 +126,8 @@ static void row_event(lv_event_t *e)
             post(ACT_MENU_TOGGLE, i, 0);
         else
             select_row(i);
-    } else if (code == LV_EVENT_LONG_PRESSED && it->kind == ITEM_LEVEL_TOGGLE) {
+    } else if (code == LV_EVENT_LONG_PRESSED
+               && (it->kind == ITEM_LEVEL_TOGGLE || it->kind == ITEM_LEVEL_CYCLE)) {
         post(ACT_MENU_TOGGLE, i, 0);
     }
 }

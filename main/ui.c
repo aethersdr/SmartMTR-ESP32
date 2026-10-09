@@ -401,7 +401,9 @@ static void show_tiles(const knob_slice_t *s)
                 ui_set_textf(t->label, "AF\n%d", s->audio_level);
                 break;
             case PARAM_AGC_T:
-                ui_set_textf(t->label, "AGC %s\n%d", s->agc_mode, s->agc_threshold);
+                ui_set_textf(t->label, "AGC %s\n%d", s->agc_mode,
+                             strcmp(s->agc_mode, "off") == 0 ? kv_get_int(&s->kv, "agc_off_level")
+                                                             : s->agc_threshold);
                 on = strcmp(s->agc_mode, "off") != 0;
                 break;
             case PARAM_FILTER_WIDTH:
