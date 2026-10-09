@@ -130,7 +130,10 @@ port.
 idf.py -p /dev/ttyACM0 flash
 ```
 
-Tap RESET to run it. Logs go to UART0 on the 4-pin UART header (115200).
+Tap RESET to run it. Within about 3 s the board re-enumerates as
+`AetherSDR AETHER_KNOB`. If it is still `USB JTAG/serial debug unit`, the
+reset after flashing left it in download mode: tap RESET again, or run
+`python -m esptool --port <port> --after watchdog-reset chip-id`. Logs go to UART0 on the 4-pin UART header (115200).
 
 ## Use with AetherSDR
 
