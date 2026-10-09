@@ -70,6 +70,9 @@ typedef struct {
 extern const menu_item_t g_menu_items[];
 extern const int g_menu_item_count;
 
+// Index of the first row with this special, or -1.
+int menu_item_with_special(item_special_t special);
+
 // The table's own string for a status key the menu tracks in `scope`'s
 // object (slice, or transmit for TX and CW), or NULL. kv_put() stores it.
 const char *menu_tracked_key(bool slice_object, const char *key);

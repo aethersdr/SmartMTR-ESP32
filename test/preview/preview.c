@@ -112,10 +112,17 @@ int main(int argc, char **argv)
     if (strncmp(state, "menu", 4) == 0) {
         menu_open();
         run_for(400);
-        int rows = strcmp(state, "menu_tx") == 0 ? 9 : strcmp(state, "menu_mid") == 0 ? 3 : 0;
+        // Turning moves the highlight down the list; menu_edit then clicks
+        // the dial to put the highlighted row (AGC) into edit.
+        int rows = strcmp(state, "menu_tx") == 0 ? 14 : strcmp(state, "menu_mid") == 0 ? 3
+                 : strcmp(state, "menu_edit") == 0 ? 6 : 0;
         if (rows) {
-            menu_dial_turn(rows);       // clockwise: down the list
+            menu_dial_turn(rows);
             run_for(600);
+        }
+        if (strcmp(state, "menu_edit") == 0) {
+            menu_dial_click();
+            run_for(100);
         }
     }
     lv_refr_now(d);

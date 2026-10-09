@@ -24,6 +24,7 @@ There are two kinds of input, and this document keeps their names apart:
 | --- | --- |
 | Turn the dial | Tune the active slice by its step |
 | Click the dial | Next tuning step (10 Hz → 10 kHz); in parameter mode, back to tuning |
+| Click-and-hold the dial (0.6 s) | Tune lock on/off for the active slice; the face shows **LOCKED** and turning does not tune |
 | Tap a tile | Turning the dial adjusts that parameter (yellow outline); tap it again to tune |
 | Touch-and-hold NR / NB / ANF | Toggle it on or off |
 | Touch-and-hold AGC or AF | Step AGC mode (off/slow/med/fast) |
@@ -34,10 +35,24 @@ There are two kinds of input, and this document keeps their names apart:
 ### Menu
 
 Swipe down anywhere on the face to open it. It shows a scrolling list of
-values for the active slice and the transmitter:
+values for the active slice and the transmitter. It works by touch or by the
+dial alone.
 
-- Tap a row to put it on the dial (yellow outline); tap it again to release it.
-- With no row selected, turning the dial scrolls the list.
+With the dial:
+
+- **Turn** to move the highlight (white outline) from row to row.
+- **Click** a highlighted on/off row to flip it. Click any other row to put it
+  in edit (yellow outline), where turning changes it.
+- **Click while editing:** on a row with a switch (RIT, XIT, Squelch, WNB, APF,
+  Compander, Monitor) it flips the switch; on AGC it steps the mode. On a
+  list row it sends the previewed choice now and leaves edit; on a plain level
+  row it leaves edit.
+- **Click-and-hold** leaves edit, dropping a previewed choice. With nothing in
+  edit, it closes the menu.
+
+By touch:
+
+- Tap a row to put it in edit (yellow outline); tap it again to release it.
 - Tap an on/off row (Mute, Diversity, Tune lock, Break-in) to flip it.
 - Touch-and-hold a row that has a level and a switch (RIT, XIT, Squelch, WNB,
   APF, Compander, Monitor) to flip its switch.
@@ -48,8 +63,8 @@ values for the active slice and the transmitter:
 - For list rows (Mode, antennas, Band, NR/ANF mode), turning the dial
   previews the choice in yellow. It is sent once the dial rests for 0.7 s.
 
-To close it, tap the grip at the bottom, swipe up from the grip, click the
-dial, or leave it for 8 s.
+To close it, tap the grip at the bottom, swipe up from the grip,
+click-and-hold the dial (with nothing in edit), or leave it for 8 s.
 
 Rows:
 

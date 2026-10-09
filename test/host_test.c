@@ -153,6 +153,16 @@ static void test_menu(void)
 
     act(ACT_MENU_TOGGLE, "Tune lock", 0);
     expect_sent("|slice lock 2\n");
+    // While locked, turning the dial sends nothing and the readout stays put.
+    double locked_at = m->slices[2].freq_mhz;
+    sent_len = 0;
+    sent[0] = '\0';
+    knob_action_t turn = {.kind = ACT_TUNE, .arg = 5};
+    flex_api_action(&turn);
+    flex_api_tick(2150);
+    assert(!strstr(sent, "slice tune") && m->slices[2].freq_mhz == locked_at);
+    act(ACT_MENU_TOGGLE, "Tune lock", 0);
+    expect_sent("|slice unlock 2\n");
     act(ACT_MENU_CHOOSE, "Band", 3);
     expect_sent("|display pan set 0x40000000 band=40\n");
 

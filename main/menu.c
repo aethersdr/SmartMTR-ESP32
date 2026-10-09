@@ -25,12 +25,18 @@ typedef struct {
     lv_obj_t *name;
     lv_obj_t *value;
     bool on;            // last drawn state, so styles are only touched on change
-    bool selected;
+    int frame;          // last drawn outline: FRAME_*
 } row_t;
+
+enum { FRAME_NONE, FRAME_HIGHLIGHT, FRAME_EDIT };
 
 static row_t s_rows[MENU_ITEM_MAX];
 static lv_obj_t *s_menu, *s_list, *s_title;
 static bool s_open;
+// Dial navigation: turning moves the highlight; a click puts the highlighted
+// row into edit (s_selected), where turning changes its value. A tap does
+// both at once.
+static int s_highlight = -1;
 static int s_selected = -1;
 static int s_pending = -1;           // previewed choice index, -1 when none
 static uint32_t s_pending_ms;
@@ -78,10 +84,11 @@ static void draw_row(int i)
         r->on = on;
         lv_obj_set_style_bg_color(r->row, on ? COL_ROW_ON : COL_ROW, 0);
     }
-    bool selected = i == s_selected;
-    if (selected != r->selected) {
-        r->selected = selected;
-        lv_obj_set_style_border_width(r->row, selected ? 3 : 0, 0);
+    int frame = i == s_selected ? FRAME_EDIT : i == s_highlight ? FRAME_HIGHLIGHT : FRAME_NONE;
+    if (frame != r->frame) {
+        r->frame = frame;
+        lv_obj_set_style_border_width(r->row, frame == FRAME_EDIT ? 3 : frame ? 2 : 0, 0);
+        lv_obj_set_style_border_color(r->row, frame == FRAME_EDIT ? COL_SELECT : COL_TEXT, 0);
     }
 }
 
@@ -103,15 +110,78 @@ static void send_pending(void)
     s_pending = -1;
 }
 
+static bool usable(int i)
+{
+    const menu_item_t *it = &g_menu_items[i];
+    return it->kind != ITEM_HEADER && menu_item_visible(it, focus_slice());
+}
+
+static void set_highlight(int i)
+{
+    int old = s_highlight;
+    s_highlight = i;
+    if (old >= 0 && old != i)
+        draw_row(old);
+    if (i >= 0) {
+        draw_row(i);
+        lv_obj_scroll_to_view(s_rows[i].row, LV_ANIM_ON);
+    }
+}
+
+// Leaves edit; a previewed choice is sent (confirm) or dropped (back).
+static void leave_edit(bool confirm)
+{
+    if (s_selected < 0)
+        return;
+    int old = s_selected;
+    if (confirm)
+        send_pending();
+    s_pending = -1;
+    s_selected = -1;
+    draw_row(old);
+}
+
+static void enter_edit(int i)
+{
+    s_selected = i;
+    draw_row(i);
+}
+
+// A tap on a row: highlight it and put it on the dial, or release it when
+// it is already there.
 static void select_row(int i)
 {
-    int old = s_selected;
-    send_pending();
-    s_selected = (old == i) ? -1 : i;   // tapping the selected row releases it
-    if (old >= 0)
-        draw_row(old);
-    if (s_selected >= 0)
-        draw_row(s_selected);
+    bool was = s_selected == i;
+    leave_edit(true);
+    set_highlight(i);
+    if (!was)
+        enter_edit(i);
+}
+
+// Turning the dial with nothing in edit: move the highlight by `steps`
+// usable rows, stopping at the ends.
+static void move_highlight(int steps)
+{
+    int i = s_highlight;
+    int dir = steps > 0 ? 1 : -1;
+    for (int n = steps > 0 ? steps : -steps; n > 0; --n) {
+        int j = i + dir;
+        while (j >= 0 && j < g_menu_item_count && !usable(j))
+            j += dir;
+        if (j < 0 || j >= g_menu_item_count)
+            break;
+        i = j;
+    }
+    if (i >= 0 && i != s_highlight)
+        set_highlight(i);
+}
+
+static int first_usable(void)
+{
+    for (int i = 0; i < g_menu_item_count; ++i)
+        if (usable(i))
+            return i;
+    return -1;
 }
 
 // ---------------------------------------------------------------- events
@@ -260,6 +330,7 @@ void menu_open(void)
     s_dial_ms = now_ms();
     lv_obj_scroll_to_y(s_list, 0, LV_ANIM_OFF);
     draw_title();
+    s_highlight = first_usable();
     for (int i = 0; i < g_menu_item_count; ++i)
         draw_row(i);
     lv_obj_set_hidden(s_menu, false);
@@ -271,13 +342,8 @@ void menu_close(void)
 {
     if (!s_open)
         return;
-    send_pending();
+    leave_edit(true);
     s_open = false;
-    if (s_selected >= 0) {
-        int old = s_selected;
-        s_selected = -1;
-        draw_row(old);
-    }
     slide(lv_obj_get_y(s_menu), -480, true);
 }
 
@@ -302,6 +368,11 @@ void menu_update(const knob_model_t *m, int focus, bool model_changed)
     }
     if (model_changed) {
         draw_title();
+        // A mode change can hide the rows in use (APF, CW settings).
+        if (s_selected >= 0 && !usable(s_selected))
+            leave_edit(false);
+        if (s_highlight >= 0 && !usable(s_highlight))
+            s_highlight = first_usable();
         for (int i = 0; i < g_menu_item_count; ++i)
             draw_row(i);
     }
@@ -311,7 +382,7 @@ void menu_dial_turn(int detents)
 {
     s_dial_ms = now_ms();
     if (s_selected < 0) {
-        lv_obj_scroll_by_bounded(s_list, 0, -detents * (ROW_HEIGHT + 6), LV_ANIM_ON);
+        move_highlight(detents);
         return;
     }
     const menu_item_t *it = &g_menu_items[s_selected];
@@ -330,8 +401,37 @@ void menu_dial_turn(int detents)
     }
 }
 
+// Click: act on the highlighted row, or on the row in edit.
 void menu_dial_click(void)
 {
     s_dial_ms = now_ms();
-    menu_close();
+    if (s_selected < 0) {
+        if (s_highlight < 0)
+            return;
+        if (g_menu_items[s_highlight].kind == ITEM_TOGGLE)
+            post(ACT_MENU_TOGGLE, s_highlight, 0);
+        else
+            enter_edit(s_highlight);
+        return;
+    }
+    switch (g_menu_items[s_selected].kind) {
+    case ITEM_LEVEL_TOGGLE:   // flip the switch, keep the level on the dial
+    case ITEM_LEVEL_CYCLE:    // step the mode, keep the level on the dial
+        post(ACT_MENU_TOGGLE, s_selected, 0);
+        break;
+    default:                  // choices are sent now; levels are already live
+        leave_edit(true);
+        break;
+    }
+}
+
+// Click-and-hold: back out. Leave edit (dropping a previewed choice), or
+// close the menu when nothing is in edit.
+void menu_dial_hold(void)
+{
+    s_dial_ms = now_ms();
+    if (s_selected >= 0)
+        leave_edit(false);
+    else
+        menu_close();
 }

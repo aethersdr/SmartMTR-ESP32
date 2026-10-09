@@ -2,6 +2,7 @@
 
 #include "board.h"
 #include "menu.h"
+#include "menu_items.h"
 #include "model.h"
 #include "usb_link.h"
 
@@ -71,7 +72,14 @@ static lv_obj_t *s_status_panel, *s_status_label, *s_step_label, *s_station_labe
 static knob_mode_t s_mode = MODE_TUNE;
 static knob_param_t s_param = PARAM_AF;
 static uint32_t s_seen_revision = UINT32_MAX;
+// A dial click is reported on release; holding it down this long is a
+// click-and-hold instead, reported once when the time passes.
+#define DIAL_HOLD_MS 600
+
 static bool s_btn_was_down;
+static bool s_hold_fired;
+static uint32_t s_dial_down_ms;
+static bool s_locked_drawn;
 static knob_model_t s_snap;
 
 // ---------------------------------------------------------------- geometry
@@ -465,14 +473,33 @@ static void handle_dial(const knob_model_t *m)
 {
     int detents = board_dial_take_detents();
     bool down = board_dial_is_down();
-    bool clicked = down && !s_btn_was_down;
+    uint32_t now = lv_tick_get();
+    bool held = false;
+    if (down && !s_btn_was_down) {
+        s_dial_down_ms = now;
+        s_hold_fired = false;
+    }
+    if (down && !s_hold_fired && now - s_dial_down_ms >= DIAL_HOLD_MS) {
+        s_hold_fired = true;
+        held = true;
+    }
+    bool clicked = !down && s_btn_was_down && !s_hold_fired;
     s_btn_was_down = down;
+
     if (menu_is_open()) {
         if (detents)
             menu_dial_turn(detents);
         if (clicked)
             menu_dial_click();
+        if (held)
+            menu_dial_hold();
         return;
+    }
+    if (held && m->link == LINK_BOUND) {
+        // Click-and-hold on the face: tune lock on the active slice.
+        knob_action_t a = {.kind = ACT_MENU_TOGGLE, .item = menu_item_with_special(SPECIAL_LOCK)};
+        if (a.item >= 0)
+            usb_link_post_action(&a);
     }
     if (detents) {
         knob_action_t a = s_mode == MODE_TUNE
@@ -518,8 +545,15 @@ static void refresh(lv_timer_t *timer)
     const knob_slice_t *fs = focus >= 0 ? &v->slices[focus] : NULL;
     show_slice(&s_top, fs, focus, v->transmitting);
     show_slice(&s_bottom, other >= 0 ? &v->slices[other] : NULL, other, v->transmitting);
-    if (fs)
-        ui_set_textf(s_step_label, s_mode == MODE_TUNE ? "STEP %d Hz" : "KNOB ADJUSTS", fs->step);
+    bool locked = fs && kv_get_int(&fs->kv, "lock");
+    if (locked != s_locked_drawn) {
+        s_locked_drawn = locked;
+        lv_obj_set_style_text_color(s_step_label, locked ? COL_LEVEL : COL_DIM, 0);
+    }
+    if (locked)
+        ui_set_text(s_step_label, "LOCKED");
+    else if (fs)
+        ui_set_textf(s_step_label, s_mode == MODE_TUNE ? "STEP %d Hz" : "DIAL ADJUSTS", fs->step);
     else
         ui_set_text(s_step_label, "");
     show_tiles(fs);

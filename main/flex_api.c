@@ -538,7 +538,9 @@ static void flush_tune(knob_model_t *m)
 {
     int n;
     knob_slice_t *s = focus(m, &n);
-    if (!s || s_pending_detents == 0) {
+    // A locked slice refuses tuning; showing the detents would leave the
+    // readout on a frequency the radio never took.
+    if (!s || s_pending_detents == 0 || kv_get_int(&s->kv, "lock")) {
         s_pending_detents = 0;
         return;
     }

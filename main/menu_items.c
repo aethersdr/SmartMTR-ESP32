@@ -144,6 +144,14 @@ static const knob_kv_t *kv_of(const menu_item_t *it, const knob_slice_t *s, cons
     return slice_scope(it) ? (s ? &s->kv : NULL) : &m->tx_kv;
 }
 
+int menu_item_with_special(item_special_t special)
+{
+    for (int i = 0; i < g_menu_item_count; ++i)
+        if (g_menu_items[i].special == special)
+            return i;
+    return -1;
+}
+
 bool menu_item_visible(const menu_item_t *it, const knob_slice_t *s)
 {
     if (it->kind == ITEM_HEADER || !it->modes)

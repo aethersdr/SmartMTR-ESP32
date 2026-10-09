@@ -10,6 +10,7 @@ faces: preview
 	./preview waiting.ppm waiting && magick waiting.ppm waiting.png
 	./preview menu.ppm menu && magick menu.ppm menu.png
 	./preview menu_mid.ppm menu_mid && magick menu_mid.ppm menu_mid.png
+	./preview menu_edit.ppm menu_edit && magick menu_edit.ppm menu_edit.png
 	./preview menu_tx.ppm menu_tx && magick menu_tx.ppm menu_tx.png
 	rm -f *.ppm
 
