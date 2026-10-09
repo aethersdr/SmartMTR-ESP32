@@ -13,7 +13,7 @@
 #define LINE_MAX_BYTES   8192   // `meter` definition lines run to several KB
 #define MAX_METERS       192
 #define PING_MS          1000
-#define UDP_REGISTER_MS  5000   // repeated until the first meter packet lands
+#define UDP_REGISTER_MS  250    // repeated until the first Flex VITA packet lands
 #define TUNE_MIN_GAP_MS  40     // coalesce knob detents into one tune command
 #define NO_CARRIER_WATTS 0.0011f
 
@@ -39,6 +39,7 @@ static uint32_t s_seq;
 static uint32_t s_last_ping_ms;
 static uint32_t s_last_udp_reg_ms;
 static bool s_sent_handshake;
+static bool s_udp_confirmed;
 static uint32_t s_now_ms;
 
 static meter_def_t s_meters[MAX_METERS];
@@ -69,12 +70,15 @@ static void send_cmd(const char *fmt, ...)
     s_tcp(buf, (size_t)n);
 }
 
-static void register_udp(void)
+// The radio cannot infer the relay's UDP endpoint, which is FlexLib's WAN
+// case: register with an ASCII datagram naming our handle, repeated until
+// a Flex VITA packet arrives (FlexLib Radio.cs RegisterUDP). `client udpport`
+// would name a port on the PC, so it is never sent.
+static void register_udp(uint32_t handle)
 {
-    // The radio learns the relay's UDP return address from this datagram.
-    // `client udpport` would name a port on the PC, so it is never sent.
-    static const uint8_t probe = 0x00;
-    s_udp(4992, &probe, 1);
+    char msg[48];
+    int n = snprintf(msg, sizeof msg, "client udp_register handle=0x%lX", (unsigned long)handle);
+    s_udp(4992, (const uint8_t *)msg, (size_t)n);
     s_last_udp_reg_ms = s_now_ms;
 }
 
@@ -369,7 +373,7 @@ static void handle_line(char *line)
             send_cmd("sub tx all");
             send_cmd("sub meter all");
             send_cmd("keepalive enable");
-            register_udp();
+            register_udp(m->our_handle);
         }
         bump(m);
         break;
@@ -407,6 +411,7 @@ void flex_api_connected(void)
     s_line_len = 0;
     s_line_overflow = false;
     s_sent_handshake = false;
+    s_udp_confirmed = false;
     s_meter_count = 0;
     s_pending_detents = 0;
     s_last_ping_ms = s_now_ms;
@@ -478,7 +483,10 @@ void flex_api_rx_datagram(uint16_t radio_port, const uint8_t *d, size_t len)
     if (tsf)
         off += 8;
     size_t end = total - (has_trailer ? 4 : 0);
-    if (oui != 0x001C2D || packet_class != 0x8002 || off > end)
+    if (oui != 0x001C2D)
+        return;
+    s_udp_confirmed = true;  // any Flex packet means the radio knows our endpoint
+    if (packet_class != 0x8002 || off > end)
         return;
 
     model_lock();
@@ -532,8 +540,8 @@ void flex_api_tick(uint32_t now_ms)
     }
     model_lock();
     knob_model_t *m = model_get();
-    if (s_sent_handshake && !m->meters_seen && now_ms - s_last_udp_reg_ms >= UDP_REGISTER_MS)
-        register_udp();
+    if (s_sent_handshake && !s_udp_confirmed && now_ms - s_last_udp_reg_ms >= UDP_REGISTER_MS)
+        register_udp(m->our_handle);
     if (s_pending_detents && now_ms - s_last_tune_ms >= TUNE_MIN_GAP_MS)
         flush_tune(m);
     // Peak-hold decays 10 dB/s toward the live level.

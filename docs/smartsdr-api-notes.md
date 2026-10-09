@@ -33,8 +33,11 @@ authority) and cross-checked against AetherSDR's client.
   Watts/Percent raw.
 
 ## UDP over the CTR2 USB link
-- Register by sending a DATAGRAM (one 0x00 byte) to radio port 4992; never
-  `client udpport` (the port would be on the PC). See AetherSDR
+- The radio cannot see our UDP endpoint (it is the relay's socket), which is
+  FlexLib's WAN case: send the ASCII DATAGRAM `client udp_register
+  handle=0x<HANDLE>` (uppercase hex, no padding) to radio port 4992, repeated
+  until any Flex-OUI VITA packet arrives (FlexLib Radio.cs RegisterUDP).
+  Never `client udpport`: the port would be on the PC. See AetherSDR
   docs/ctr2-usb-relay-design.md.
 - VITA-49, big-endian. Meters: ExtDataWithStream, OUI 0x001C2D,
   packet class 0x8002. Payload = (uint16 id, int16 value) pairs; last wins.

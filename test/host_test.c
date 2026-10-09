@@ -12,6 +12,7 @@ static char sent[8192];
 static size_t sent_len;
 static int udp_count;
 static uint16_t udp_port;
+static char udp_last[64];
 
 static void tcp(const char *b, size_t n)
 {
@@ -23,8 +24,7 @@ static void tcp(const char *b, size_t n)
 
 static void udp(uint16_t port, const uint8_t *b, size_t n)
 {
-    (void)b;
-    (void)n;
+    snprintf(udp_last, sizeof udp_last, "%.*s", (int)n, (const char *)b);
     udp_port = port;
     ++udp_count;
 }
@@ -67,6 +67,7 @@ int main(void)
     assert(!strstr(sent, "client gui"));
     assert(!strstr(sent, "udpport"));
     assert(udp_count == 1 && udp_port == 4992);
+    assert(strcmp(udp_last, "client udp_register handle=0x5A0B1C2D") == 0);
 
     // A non-GUI client (no client_id) must not be bound; a GUI client must.
     feed("S5A0B1C2D|client 0x11111111 connected program=SmartMTR station=Mac\n");
@@ -137,8 +138,15 @@ int main(void)
     put16(pkt + 28, 7);  put16(pkt + 30, (uint16_t)(int16_t)(-73 * 128));
     put16(pkt + 32, 9);  put16(pkt + 34, (uint16_t)(int16_t)(50 * 128));    // 50 dBm = 100 W
     put16(pkt + 36, 10); put16(pkt + 38, (uint16_t)(int16_t)(1.5 * 128));
+    // Registration repeats until a Flex VITA packet arrives, then stops.
+    int before = udp_count;
+    flex_api_tick(2400);
+    assert(udp_count > before);
     flex_api_rx_datagram(4992, pkt, words * 4);
     assert(m->meters_seen);
+    before = udp_count;
+    flex_api_tick(9000);
+    assert(udp_count == before);
     assert(fabsf(m->slices[2].level_dbm + 73.0f) < 0.01f);
     assert(fabsf(m->fwd_watts - 100.0f) < 0.1f);
     assert(fabsf(m->swr - 1.5f) < 0.01f);

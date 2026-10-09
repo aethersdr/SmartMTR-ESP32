@@ -3,10 +3,12 @@
 #include "ctr2_link.h"
 #include "model.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "class/hid/hid_device.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -72,11 +74,13 @@ static const uint8_t s_config_desc[] = {
     TUD_HID_INOUT_DESCRIPTOR(0, 0, HID_ITF_PROTOCOL_NONE, sizeof(s_report_desc), 0x01, 0x81, 16, 1),
 };
 
+static char s_serial[13];         // the chip's MAC, so two knobs are told apart
+
 static const char *s_strings[] = {
     (const char[]){0x09, 0x04},  // English (US)
     "AetherSDR",
     USB_PRODUCT,
-    NULL,                         // serial: TinyUSB fills in the chip MAC
+    s_serial,
 };
 
 uint8_t const *tud_hid_descriptor_report_cb(uint8_t instance)
@@ -318,6 +322,11 @@ void usb_link_start(void)
     flex_api_init(send_tcp, send_udp);
     begin_waiting();
     xTaskCreatePinnedToCore(radio_task, "radio", 6144, NULL, 5, &s_radio_task, 1);
+
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(s_serial, sizeof s_serial, "%02X%02X%02X%02X%02X%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
     tinyusb_config_t cfg = TINYUSB_DEFAULT_CONFIG(usb_event);
     cfg.descriptor.device = &s_device_desc;
