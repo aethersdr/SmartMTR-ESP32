@@ -356,7 +356,8 @@ static void tiles(lv_obj_t *parent)
 #define DOCK_H          96
 #define DOCK_Y          8       // centre offset of the dock
 #define DOCK_TILES_MS   8000
-#define SPECTRUM_STALE_MS 2000
+#define SPECTRUM_STALE_MS 5000   // no frame for this long: fall back to the tiles
+#define SPECTRUM_SETTLE_MS 1500  // frames for this long before switching to it
 #define PEAK_DECAY      3       // level units per frame
 
 typedef enum { DOCK_SPECTRUM, DOCK_TILES } dock_view_t;
@@ -367,10 +368,17 @@ static uint8_t s_bars[64], s_peaks[64];
 static int s_bar_count;
 static uint32_t s_spectrum_seen_ms;   // lv_tick when the last frame arrived
 static uint32_t s_spectrum_stamp;     // model stamp of that frame
+static uint32_t s_live_since_ms;      // start of the current unbroken run of frames
 
 static bool spectrum_live(void)
 {
     return s_bar_count > 0 && lv_tick_get() - s_spectrum_seen_ms < SPECTRUM_STALE_MS;
+}
+
+// Live long enough to switch to without flapping on a brief gap.
+static bool spectrum_settled(void)
+{
+    return spectrum_live() && lv_tick_get() - s_live_since_ms >= SPECTRUM_SETTLE_MS;
 }
 
 static void show_dock(dock_view_t view)
@@ -448,7 +456,8 @@ static void update_spectrum(const knob_model_t *v)
 {
     if (v->spectrum_bars <= 0 || v->spectrum_ms == s_spectrum_stamp)
         return;
-    bool first = s_bar_count == 0;
+    if (!spectrum_live())
+        s_live_since_ms = lv_tick_get();   // a new run of frames starts
     s_spectrum_stamp = v->spectrum_ms;
     s_spectrum_seen_ms = lv_tick_get();
     s_bar_count = v->spectrum_bars;
@@ -457,19 +466,23 @@ static void update_spectrum(const knob_model_t *v)
         int p = s_peaks[i] - PEAK_DECAY;
         s_peaks[i] = (uint8_t)(s_bars[i] > p ? s_bars[i] : p);
     }
-    if (first)
-        show_dock(DOCK_SPECTRUM);   // the spectrum is the default once it exists
     if (s_dock == DOCK_SPECTRUM)
         lv_obj_invalidate(s_spectrum);
 }
 
+// The spectrum is the default once it has settled; the tiles take over if
+// it stops, and give way to it again after DOCK_TILES_MS unused.
+static bool s_spectrum_shown_once;
+
 static void dock_tick(void)
 {
-    if (s_dock == DOCK_SPECTRUM && !spectrum_live())
+    if (s_dock == DOCK_SPECTRUM && !spectrum_live()) {
         show_dock(DOCK_TILES);
-    else if (s_dock == DOCK_TILES && spectrum_live() && s_mode == MODE_TUNE
-             && lv_tick_get() - s_tiles_used_ms >= DOCK_TILES_MS)
+    } else if (s_dock == DOCK_TILES && spectrum_settled() && s_mode == MODE_TUNE
+               && (!s_spectrum_shown_once || lv_tick_get() - s_tiles_used_ms >= DOCK_TILES_MS)) {
+        s_spectrum_shown_once = true;
         show_dock(DOCK_SPECTRUM);
+    }
 }
 
 // ---------------------------------------------------------------- refresh

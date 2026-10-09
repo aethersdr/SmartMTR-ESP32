@@ -297,7 +297,12 @@ int main(int argc, char **argv)
     lv_display_set_buffers(d, buf, NULL, sizeof buf, LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(d, flush);
     ui_start(d);
-    run_for(100);   // the first refresh picks up the spectrum
+    // The spectrum takes over once frames have arrived for 1.5 s.
+    for (int t = 0; t < 1700; t += 50) {
+        model_get()->spectrum_ms++;
+        model_get()->revision++;
+        run_for(50);
+    }
     if (strcmp(state, "peaks") == 0) {
         // A second frame with one bar fallen, to show its peak-hold mark.
         m->spectrum[5] = 120;
