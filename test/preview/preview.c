@@ -328,6 +328,45 @@ int main(int argc, char **argv)
         m->revision++;
         run_for(100);
     }
+    if (strcmp(state, "live") == 0) {
+        // A frame captured off the USB bus from AetherSDR (usbmon), passband
+        // 100-4172 Hz: low 83, span 5000, content to the 3870-4398 Hz bar.
+        static const uint8_t frame[32] = {79, 122, 138, 134, 130, 120, 123, 103, 140, 125, 111,
+                                          122, 131, 111, 118, 118, 114, 122, 103, 106, 118, 115,
+                                          113, 103, 104, 120, 122, 103, 102, 75, 105, 0};
+        memcpy(m->spectrum, frame, sizeof frame);
+        m->spectrum_bars = 32;
+        m->spectrum_low_hz = 83;
+        m->spectrum_span_hz = 5000;
+        m->spectrum_ms += 10;
+        m->revision++;
+        run_for(100);
+    }
+    if (strcmp(state, "geomtest") == 0) {
+        // Every bar full: the last bar must reach the right end of the axis
+        // area (DOCK_W - pad), where the scale's top frequency is drawn.
+        memset(m->spectrum, 255, 32);
+        m->spectrum_bars = 32;
+        m->spectrum_ms += 10;
+        m->revision++;
+        run_for(100);
+        lv_refr_now(d);
+        // Dock: 212 px wide, centred on x = 240; bars end at its right edge - 10.
+        const int right = 240 + 212 / 2 - 10, y = 240 + 8;   // dock centre row
+        uint32_t px_in = s_fb[y * 480 + right - 3], px_out = s_fb[y * 480 + right + 4];
+        int in_r = (px_in >> 16) & 0xFF, in_g = (px_in >> 8) & 0xFF, in_b = px_in & 0xFF;
+        int out_b = px_out & 0xFF, out_g = (px_out >> 8) & 0xFF;
+        bool bar_at_edge = in_g > 150 && in_b > 200 && in_r < 120;     // the cyan bar colour
+        bool panel_beyond = !(out_g > 150 && out_b > 200);
+        printf("geomtest: pixel at x=%d is %06x, at x=%d is %06x\n", right - 3, px_in & 0xFFFFFF,
+               right + 4, px_out & 0xFFFFFF);
+        if (!bar_at_edge || !panel_beyond) {
+            fprintf(stderr, "geomtest FAILED: the bars do not end at the axis's right edge\n");
+            return 1;
+        }
+        printf("geomtest ok: the last bar ends at the axis's right edge\n");
+        return 0;
+    }
     int span = strcmp(state, "span600") == 0 ? 600 : strcmp(state, "span12k") == 0 ? 12000 : 0;
     if (span) {
         voice_spectrum(m, span == 600 ? 20 : 100, span);

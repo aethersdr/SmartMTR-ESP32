@@ -402,13 +402,16 @@ static void spectrum_draw(lv_event_t *e)
     lv_layer_t *layer = lv_event_get_layer(e);
     lv_area_t a;
     lv_obj_get_coords(obj, &a);
+    // The same geometry label_axis() uses: bars fill exactly DOCK_W - 2 * pad
+    // pixels from a.x1 + pad, so bar i sits over the frequencies its ticks
+    // name. (LVGL areas are inclusive, and an integer slot width would shrink
+    // the bars into the left of the axis.)
     const int pad = 10, axis = 18;
-    const int x0 = a.x1 + pad, x1 = a.x2 - pad;
+    const int x0 = a.x1 + pad, w = DOCK_W - 2 * pad;
     const int y_top = a.y1 + pad, y_base = a.y2 - axis;
     const int h = y_base - y_top;
     if (s_bar_count <= 0)
         return;
-    const int slot = (x1 - x0) / s_bar_count;
     lv_draw_rect_dsc_t bar;
     lv_draw_rect_dsc_init(&bar);
     bar.bg_color = s_spectrum_tx ? COL_LEVEL : COL_SCALE;
@@ -416,13 +419,14 @@ static void spectrum_draw(lv_event_t *e)
     lv_draw_rect_dsc_t peak = bar;
     peak.bg_color = COL_TEXT;
     for (int i = 0; i < s_bar_count; ++i) {
-        const int bx = x0 + i * slot;
+        const int bx = x0 + i * w / s_bar_count;            // this bar's left edge
+        const int bx_next = x0 + (i + 1) * w / s_bar_count; // the next bar's
         const int level = s_bars[i] * h / 255;
-        lv_area_t r = {bx + 1, y_base - level, bx + slot - 2, y_base};
+        lv_area_t r = {bx + 1, y_base - level, bx_next - 2, y_base};
         if (level > 0)
             lv_draw_rect(layer, &bar, &r);
         const int py = y_base - s_peaks[i] * h / 255;
-        lv_area_t p = {bx + 1, py - 2, bx + slot - 2, py};
+        lv_area_t p = {bx + 1, py - 2, bx_next - 2, py};
         if (s_peaks[i] > s_bars[i])
             lv_draw_rect(layer, &peak, &p);
     }
