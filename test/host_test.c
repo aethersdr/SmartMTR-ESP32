@@ -291,7 +291,7 @@ int main(void)
     put16(pkt + 36, 10); put16(pkt + 38, (uint16_t)(int16_t)(1.5 * 128));
     // Registration repeats until a Flex VITA packet arrives, then stops.
     int before = udp_count;
-    flex_api_tick(2400);
+    flex_api_tick(6500);                       // fallback repeats every 5 s
     assert(udp_count > before);
     flex_api_rx_datagram(4992, pkt, words * 4);
     assert(m->meters_seen);
@@ -323,6 +323,30 @@ int main(void)
 
     flex_api_disconnected();
     assert(m->link == LINK_WAITING);
+
+    // Through AetherSDR's relay: the port arrives right after READY, before
+    // the radio's H line, and the client registers it with `client udpport`
+    // (the radio ignores udp_register on a LAN) plus a 1-byte probe to 4992.
+    flex_api_connected();
+    sent_len = 0;
+    sent[0] = '\0';
+    udp_count = 0;
+    flex_api_set_relay_udp_port(51234);
+    assert(!strstr(sent, "udpport"));          // nothing before the handshake
+    feed("V1.4.0.0\nH5A0B1C2D\n");
+    expect_sent("|client udpport 51234\n");
+    assert(udp_count == 1 && udp_port == 4992 && udp_last[0] == '\0');
+    assert(!strstr(sent, "udp_register"));
+    flex_api_tick(20000);
+    assert(udp_count == 1);                    // no fallback registration
+    // A port arriving after the handshake registers at once.
+    flex_api_connected();
+    sent_len = 0;
+    sent[0] = '\0';
+    feed("V1.4.0.0\nH5A0B1C2D\n");
+    flex_api_set_relay_udp_port(40000);
+    expect_sent("|client udpport 40000\n");
+    flex_api_disconnected();
     puts("host_test: all checks passed");
     return 0;
 }

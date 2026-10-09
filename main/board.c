@@ -194,8 +194,11 @@ static esp_lcd_panel_handle_t panel_init(void)
         .de_gpio_num = PIN_RGB_DE,
         .pclk_gpio_num = PIN_RGB_PCLK,
         .disp_gpio_num = -1,
-        // RGB565 bus order: B0-B4, G0-G5, R0-R4.
-        .data_gpio_nums = {5, 45, 48, 47, 21, 14, 13, 12, 11, 10, 9, 46, 3, 8, 18, 17},
+        // RGB565 bus order D0..D15. Elecrow's Arduino_GFX constructor lists
+        // GPIO 46,3,8,18,17 as R and 5,45,48,47,21 as B, but on hardware that
+        // mapping showed red and blue swapped (cyan as yellow, red as blue), so
+        // the panel's red lines are the 5,45,... group: D0-D4 take 46,3,...
+        .data_gpio_nums = {46, 3, 8, 18, 17, 14, 13, 12, 11, 10, 9, 5, 45, 48, 47, 21},
         .flags.fb_in_psram = 1,
     };
     st7701_vendor_config_t vendor = {

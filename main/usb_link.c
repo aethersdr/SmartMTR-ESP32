@@ -79,7 +79,7 @@ static const uint8_t s_report_desc[] = {
 // Link extensions this firmware offers, and the ones AetherSDR accepted.
 // The accepted set is written from the TinyUSB task and applied by the radio
 // task; it lasts until the device leaves the bus.
-#define OFFERED_EXTENSIONS CTR2_CAP(CTR2_EXT_AUDIO_SPECTRUM)
+#define OFFERED_EXTENSIONS (CTR2_CAP(CTR2_EXT_AUDIO_SPECTRUM) | CTR2_CAP(CTR2_EXT_RELAY_UDP_PORT))
 static volatile uint32_t s_accepted_extensions;
 
 static const tusb_desc_device_t s_device_desc = {
@@ -326,6 +326,8 @@ static void on_report(const uint8_t r[CTR2_REPORT_BYTES])
             flex_api_rx_datagram((uint16_t)((data[0] << 8) | data[1]), data + 2, (size_t)(len - 2));
         } else if (type == CTR2_EXT_AUDIO_SPECTRUM) {
             store_spectrum(data, len);
+        } else if (type == CTR2_EXT_RELAY_UDP_PORT && s_radio_open && len == 2) {
+            flex_api_set_relay_udp_port((uint16_t)((data[0] << 8) | data[1]));
         }
         break;
     case CTR2_RX_ERROR:

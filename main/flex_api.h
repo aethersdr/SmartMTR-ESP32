@@ -49,6 +49,10 @@ void flex_api_init(flex_send_tcp_fn tcp, flex_send_udp_fn udp);
 void flex_api_connected(void);
 void flex_api_disconnected(void);
 
+// The relay's UDP socket port for this link (link extension RELAY_UDP_PORT,
+// sent right after READY). The client registers it with `client udpport`.
+void flex_api_set_relay_udp_port(uint16_t port);
+
 // Radio TCP bytes, split at arbitrary points.
 void flex_api_rx_bytes(const uint8_t *data, size_t len);
 // One whole UDP datagram from the radio.

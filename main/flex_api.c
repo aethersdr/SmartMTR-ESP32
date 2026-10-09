@@ -14,7 +14,7 @@
 #define LINE_MAX_BYTES   8192   // `meter` definition lines run to several KB
 #define MAX_METERS       192
 #define PING_MS          1000
-#define UDP_REGISTER_MS  250    // repeated until the first Flex VITA packet lands
+#define UDP_REGISTER_MS  5000   // fallback registration, repeated until UDP arrives
 #define TUNE_MIN_GAP_MS  40     // coalesce dial detents into one tune command
 #define NO_CARRIER_WATTS 0.0011f
 
@@ -41,6 +41,8 @@ static uint32_t s_last_ping_ms;
 static uint32_t s_last_udp_reg_ms;
 static bool s_sent_handshake;
 static bool s_udp_confirmed;
+static uint16_t s_relay_udp_port;   // the relay's UDP socket for this link, 0 = unknown
+static bool s_udpport_sent;
 static uint32_t s_now_ms;
 
 static meter_def_t s_meters[MAX_METERS];
@@ -71,10 +73,21 @@ static void send_cmd(const char *fmt, ...)
     s_tcp(buf, (size_t)n);
 }
 
-// The radio cannot infer the relay's UDP endpoint, which is FlexLib's WAN
-// case: register with an ASCII datagram naming our handle, repeated until
-// a Flex VITA packet arrives (FlexLib Radio.cs RegisterUDP). `client udpport`
-// would name a port on the PC, so it is never sent.
+// UDP registration. On a LAN the radio sends our UDP to the TCP peer (the PC
+// running the relay) at the port named by `client udpport`; it ignores
+// `client udp_register` (FLEX-8600, firmware 4.2.18). The relay tells us its
+// UDP socket's port (link extension RELAY_UDP_PORT), so name that, and send a
+// one-byte datagram to 4992 as AetherSDR's own LAN connection does.
+static void register_udpport(void)
+{
+    static const uint8_t probe = 0x00;
+    send_cmd("client udpport %u", (unsigned)s_relay_udp_port);
+    s_udp(4992, &probe, 1);
+    s_udpport_sent = true;
+}
+
+// Fallback for a host that does not send RELAY_UDP_PORT: FlexLib's WAN
+// registration datagram (Radio.cs RegisterUDP). It does not work on a LAN.
 static void register_udp(uint32_t handle)
 {
     char msg[48];
@@ -398,7 +411,10 @@ static void handle_line(char *line)
             send_cmd("sub tx all");
             send_cmd("sub meter all");
             send_cmd("keepalive enable");
-            register_udp(m->our_handle);
+            if (s_relay_udp_port)
+                register_udpport();
+            else
+                register_udp(m->our_handle);
         }
         bump(m);
         break;
@@ -437,10 +453,22 @@ void flex_api_connected(void)
     s_line_overflow = false;
     s_sent_handshake = false;
     s_udp_confirmed = false;
+    s_relay_udp_port = 0;
+    s_udpport_sent = false;
     s_meter_count = 0;
     s_pending_detents = 0;
     s_last_ping_ms = s_now_ms;
     s_gui_client_id[0] = '\0';
+}
+
+void flex_api_set_relay_udp_port(uint16_t port)
+{
+    s_relay_udp_port = port;
+    if (s_connected && s_sent_handshake && port && !s_udpport_sent) {
+        model_lock();
+        register_udpport();
+        model_unlock();
+    }
 }
 
 void flex_api_disconnected(void)
@@ -567,7 +595,8 @@ void flex_api_tick(uint32_t now_ms)
     }
     model_lock();
     knob_model_t *m = model_get();
-    if (s_sent_handshake && !s_udp_confirmed && now_ms - s_last_udp_reg_ms >= UDP_REGISTER_MS)
+    if (s_sent_handshake && !s_udp_confirmed && !s_relay_udp_port
+        && now_ms - s_last_udp_reg_ms >= UDP_REGISTER_MS)
         register_udp(m->our_handle);
     if (s_pending_detents && now_ms - s_last_tune_ms >= TUNE_MIN_GAP_MS)
         flush_tune(m);
