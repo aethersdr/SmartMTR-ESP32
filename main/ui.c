@@ -1,10 +1,12 @@
 #include "ui.h"
 
 #include "board.h"
+#include "menu.h"
 #include "model.h"
 #include "usb_link.h"
 
 #include <math.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -40,11 +42,15 @@ typedef struct {
     lv_obj_t *filter;
     lv_obj_t *tx;
     bool top;
+    int slice;          // slice shown, -1 for none (the TX badge's target)
+    int tx_state;       // last drawn TX badge state
+    int32_t peak_angle;
 } slice_view_t;
 
 typedef struct {
     lv_obj_t *needle;
     lv_point_precise_t pts[2];
+    int32_t tip_x, tip_y;
     int cx, cy, len;
     float lo, hi;
 } gauge_t;
@@ -55,6 +61,7 @@ typedef struct {
     knob_param_t param;
     knob_action_kind_t toggle;   // long-press action
     const char *name;
+    bool on, selected;           // last drawn state
 } tile_t;
 
 static slice_view_t s_top, s_bottom;
@@ -93,6 +100,26 @@ static void polar(int cx, int cy, float r, float deg, int32_t *x, int32_t *y)
 static float meter_angle(bool top, float f)
 {
     return top ? TOP_START + f * ARC_SPAN : BOTTOM_START - f * ARC_SPAN;
+}
+
+// ---------------------------------------------------------------- text
+
+// LVGL redraws a label on every set_text, even to the same string, and the
+// model changes with every meter packet; so only touch labels that changed.
+void ui_set_text(lv_obj_t *l, const char *text)
+{
+    if (strcmp(lv_label_get_text(l), text) != 0)
+        lv_label_set_text(l, text);
+}
+
+void ui_set_textf(lv_obj_t *l, const char *fmt, ...)
+{
+    char buf[96];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof buf, fmt, ap);
+    va_end(ap);
+    ui_set_text(l, buf);
 }
 
 // ---------------------------------------------------------------- builders
@@ -166,6 +193,15 @@ static void meter_scale(lv_obj_t *parent, bool top)
     }
 }
 
+static void tx_badge_event(lv_event_t *e)
+{
+    slice_view_t *v = lv_event_get_user_data(e);
+    if (v->slice >= 0) {
+        knob_action_t a = {.kind = ACT_SET_TX, .arg = v->slice};
+        usb_link_post_action(&a);
+    }
+}
+
 static void slice_view(lv_obj_t *parent, slice_view_t *v, bool top)
 {
     v->top = top;
@@ -181,11 +217,20 @@ static void slice_view(lv_obj_t *parent, slice_view_t *v, bool top)
     lv_obj_align(v->freq, LV_ALIGN_CENTER, 0, top ? -92 : 110);
     v->mode = label(parent, &lv_font_montserrat_20, COL_TEXT, "");
     lv_obj_align(v->mode, LV_ALIGN_CENTER, 0, top ? -134 : 142);
-    v->tx = label(parent, &lv_font_montserrat_14, COL_LEVEL, "TX");
+    // TX badge: filled while transmitting, outlined on the TX slice, grey on
+    // the other; tapping the grey one moves TX to that slice.
+    v->tx = label(parent, &lv_font_montserrat_14, COL_DIM, "TX");
     lv_obj_set_style_border_width(v->tx, 1, 0);
-    lv_obj_set_style_border_color(v->tx, COL_LEVEL, 0);
+    lv_obj_set_style_border_color(v->tx, COL_DIM, 0);
+    lv_obj_set_style_bg_color(v->tx, COL_LEVEL, 0);
     lv_obj_set_style_pad_hor(v->tx, 4, 0);
+    lv_obj_set_clickable(v->tx, true);
+    lv_obj_set_ext_click_area(v->tx, 14);
+    lv_obj_add_event_cb(v->tx, tx_badge_event, LV_EVENT_SHORT_CLICKED, v);
     lv_obj_set_hidden(v->tx, true);
+    v->slice = -1;
+    v->tx_state = -1;
+    v->peak_angle = INT32_MIN;
     v->filter = label(parent, &lv_font_montserrat_20, COL_DIM, "");
     lv_obj_align(v->filter, LV_ALIGN_CENTER, 0, top ? -54 : 82);
 }
@@ -228,6 +273,10 @@ static void gauge_set(gauge_t *g, float v)
     f = f < 0 ? 0 : f > 1 ? 1 : f;
     int32_t x, y;
     polar(g->cx, g->cy, (float)g->len, 135.0f + f * 270.0f, &x, &y);
+    if (x == g->tip_x && y == g->tip_y)
+        return;
+    g->tip_x = x;
+    g->tip_y = y;
     g->pts[0] = (lv_point_precise_t){g->cx, g->cy};
     g->pts[1] = (lv_point_precise_t){x, y};
     lv_line_set_points(g->needle, g->pts, 2);
@@ -279,6 +328,7 @@ static void tiles(lv_obj_t *parent)
         lv_obj_set_style_radius(t->btn, 10, 0);
         lv_obj_set_style_shadow_width(t->btn, 0, 0);
         lv_obj_set_style_border_color(t->btn, COL_SELECT, 0);
+        lv_obj_set_style_border_width(t->btn, 0, 0);
         lv_obj_add_event_cb(t->btn, tile_event, LV_EVENT_ALL, t);
         t->label = label(t->btn, &lv_font_montserrat_14, COL_TEXT, t->name);
         lv_obj_set_style_text_align(t->label, LV_TEXT_ALIGN_CENTER, 0);
@@ -294,16 +344,31 @@ static void format_freq(char *buf, size_t cap, double mhz)
     snprintf(buf, cap, "%ld.%03ld.%03ld", hz / 1000000, (hz / 1000) % 1000, hz % 1000);
 }
 
-static void show_slice(slice_view_t *v, const knob_slice_t *s, bool transmitting)
+enum { TX_HIDDEN, TX_OTHER, TX_SLICE, TX_ON_AIR };
+
+static void show_tx_badge(slice_view_t *v, int state)
+{
+    if (state == v->tx_state)
+        return;
+    v->tx_state = state;
+    lv_obj_set_hidden(v->tx, state == TX_HIDDEN);
+    lv_color_t edge = state == TX_OTHER ? COL_DIM : COL_LEVEL;
+    lv_obj_set_style_border_color(v->tx, edge, 0);
+    lv_obj_set_style_text_color(v->tx, state == TX_ON_AIR ? COL_TEXT : edge, 0);
+    lv_obj_set_style_bg_opa(v->tx, state == TX_ON_AIR ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+}
+
+static void show_slice(slice_view_t *v, const knob_slice_t *s, int index, bool transmitting)
 {
     char buf[32];
+    v->slice = s ? index : -1;
     if (!s) {
         lv_arc_set_value(v->arc, 0);
         lv_arc_set_value(v->peak, 0);
-        lv_label_set_text(v->freq, v->top ? "--.---.---" : "");
-        lv_label_set_text(v->mode, "");
-        lv_label_set_text(v->filter, "");
-        lv_obj_set_hidden(v->tx, true);
+        ui_set_text(v->freq, v->top ? "--.---.---" : "");
+        ui_set_text(v->mode, "");
+        ui_set_text(v->filter, "");
+        show_tx_badge(v, TX_HIDDEN);
         return;
     }
     float f = smeter_fraction(s->level_dbm);
@@ -311,20 +376,16 @@ static void show_slice(slice_view_t *v, const knob_slice_t *s, bool transmitting
     lv_arc_set_value(v->arc, (int32_t)(f * 1000));
     // Peak-hold sliver, two degrees wide, centred on the peak.
     int32_t a = (int32_t)lroundf(meter_angle(v->top, pk));
-    lv_arc_set_angles(v->peak, a - 1, a + 1);
-    format_freq(buf, sizeof buf, s->freq_mhz);
-    lv_label_set_text(v->freq, buf);
-    lv_label_set_text_fmt(v->mode, "%c  %s", s->letter, s->mode);
-    lv_label_set_text_fmt(v->filter, "%d-%d  %s", s->filter_lo, s->filter_hi, s->rxant);
-    if (s->tx) {
-        lv_obj_set_hidden(v->tx, false);
-        lv_obj_align_to(v->tx, v->mode, LV_ALIGN_OUT_LEFT_MID, -10, 0);
-        lv_obj_set_style_bg_opa(v->tx, transmitting ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
-        lv_obj_set_style_bg_color(v->tx, COL_LEVEL, 0);
-        lv_obj_set_style_text_color(v->tx, transmitting ? COL_TEXT : COL_LEVEL, 0);
-    } else {
-        lv_obj_set_hidden(v->tx, true);
+    if (a != v->peak_angle) {
+        v->peak_angle = a;
+        lv_arc_set_angles(v->peak, a - 1, a + 1);
     }
+    format_freq(buf, sizeof buf, s->freq_mhz);
+    ui_set_text(v->freq, buf);
+    ui_set_textf(v->mode, "%c  %s", s->letter, s->mode);
+    ui_set_textf(v->filter, "%d-%d  %s", s->filter_lo, s->filter_hi, s->rxant);
+    show_tx_badge(v, !s->tx ? TX_OTHER : transmitting ? TX_ON_AIR : TX_SLICE);
+    lv_obj_align_to(v->tx, v->mode, LV_ALIGN_OUT_LEFT_MID, -10, 0);
 }
 
 static void show_tiles(const knob_slice_t *s)
@@ -333,38 +394,44 @@ static void show_tiles(const knob_slice_t *s)
         tile_t *t = &s_tiles[i];
         bool on = false;
         if (!s) {
-            lv_label_set_text(t->label, t->name);
+            ui_set_text(t->label, t->name);
         } else {
             switch (t->param) {
             case PARAM_AF:
-                lv_label_set_text_fmt(t->label, "AF\n%d", s->audio_level);
+                ui_set_textf(t->label, "AF\n%d", s->audio_level);
                 break;
             case PARAM_AGC_T:
-                lv_label_set_text_fmt(t->label, "AGC %s\n%d", s->agc_mode, s->agc_threshold);
+                ui_set_textf(t->label, "AGC %s\n%d", s->agc_mode, s->agc_threshold);
                 on = strcmp(s->agc_mode, "off") != 0;
                 break;
             case PARAM_FILTER_WIDTH:
-                lv_label_set_text_fmt(t->label, "FILT\n%d", s->filter_hi - s->filter_lo);
+                ui_set_textf(t->label, "FILT\n%d", s->filter_hi - s->filter_lo);
                 break;
             case PARAM_NR_LEVEL:
-                lv_label_set_text_fmt(t->label, "NR\n%d", s->nr_level);
+                ui_set_textf(t->label, "NR\n%d", s->nr_level);
                 on = s->nr;
                 break;
             case PARAM_NB_LEVEL:
-                lv_label_set_text_fmt(t->label, "NB\n%d", s->nb_level);
+                ui_set_textf(t->label, "NB\n%d", s->nb_level);
                 on = s->nb;
                 break;
             case PARAM_ANF_LEVEL:
-                lv_label_set_text_fmt(t->label, "ANF\n%d", s->anf_level);
+                ui_set_textf(t->label, "ANF\n%d", s->anf_level);
                 on = s->anf;
                 break;
             default:
                 break;
             }
         }
-        lv_obj_set_style_bg_color(t->btn, on ? COL_TILE_ON : COL_TILE, 0);
+        if (on != t->on) {
+            t->on = on;
+            lv_obj_set_style_bg_color(t->btn, on ? COL_TILE_ON : COL_TILE, 0);
+        }
         bool selected = s_mode == MODE_PARAM && s_param == t->param;
-        lv_obj_set_style_border_width(t->btn, selected ? 3 : 0, 0);
+        if (selected != t->selected) {
+            t->selected = selected;
+            lv_obj_set_style_border_width(t->btn, selected ? 3 : 0, 0);
+        }
     }
 }
 
@@ -395,14 +462,23 @@ static int other_slice(const knob_model_t *m, int focus)
 static void handle_knob(const knob_model_t *m)
 {
     int detents = board_knob_take_detents();
+    bool down = board_knob_pressed();
+    bool pressed = down && !s_btn_was_down;
+    s_btn_was_down = down;
+    if (menu_is_open()) {
+        if (detents)
+            menu_knob_turn(detents);
+        if (pressed)
+            menu_knob_press();
+        return;
+    }
     if (detents) {
         knob_action_t a = s_mode == MODE_TUNE
             ? (knob_action_t){.kind = ACT_TUNE, .arg = detents}
             : (knob_action_t){.kind = ACT_ADJUST, .param = s_param, .arg = detents};
         usb_link_post_action(&a);
     }
-    bool down = board_knob_pressed();
-    if (down && !s_btn_was_down) {
+    if (pressed) {
         if (s_mode == MODE_PARAM) {
             s_mode = MODE_TUNE;           // push leaves parameter mode
             s_seen_revision = UINT32_MAX;
@@ -411,7 +487,6 @@ static void handle_knob(const knob_model_t *m)
             usb_link_post_action(&a);
         }
     }
-    s_btn_was_down = down;
 }
 
 static void refresh(lv_timer_t *timer)
@@ -427,31 +502,44 @@ static void refresh(lv_timer_t *timer)
     model_unlock();
 
     handle_knob(&s_snap);
+    const knob_model_t *v = &s_snap;
+    int focus = model_focus_slice(v);
+    menu_update(v, focus, changed);
     if (!changed)
         return;
 
-    const knob_model_t *v = &s_snap;
     bool bound = v->link == LINK_BOUND;
     lv_obj_set_hidden(s_status_panel, bound);
-    lv_label_set_text(s_status_label, status_text(v->link));
+    ui_set_text(s_status_label, status_text(v->link));
 
-    int focus = model_focus_slice(v);
     int other = focus >= 0 ? other_slice(v, focus) : -1;
     const knob_slice_t *fs = focus >= 0 ? &v->slices[focus] : NULL;
-    show_slice(&s_top, fs, v->transmitting);
-    show_slice(&s_bottom, other >= 0 ? &v->slices[other] : NULL, v->transmitting);
+    show_slice(&s_top, fs, focus, v->transmitting);
+    show_slice(&s_bottom, other >= 0 ? &v->slices[other] : NULL, other, v->transmitting);
     if (fs)
-        lv_label_set_text_fmt(s_step_label, s_mode == MODE_TUNE ? "STEP %d Hz" : "KNOB ADJUSTS", fs->step);
+        ui_set_textf(s_step_label, s_mode == MODE_TUNE ? "STEP %d Hz" : "KNOB ADJUSTS", fs->step);
     else
-        lv_label_set_text(s_step_label, "");
+        ui_set_text(s_step_label, "");
     show_tiles(fs);
 
-    lv_label_set_text(s_station_label, other < 0 && bound ? v->gui_station : "");
+    ui_set_text(s_station_label, other < 0 && bound ? v->gui_station : "");
 
     gauge_set(&s_swr, v->swr < 1.0f ? 1.0f : v->swr);
     gauge_set(&s_comp, v->comp_db);
     gauge_set(&s_pwr, v->fwd_watts);
     gauge_set(&s_mic, v->mic_db);
+}
+
+// A swipe down anywhere on the face opens the menu.
+static void screen_gesture(lv_event_t *e)
+{
+    (void)e;
+    lv_indev_t *indev = lv_indev_active();
+    if (lv_indev_get_gesture_dir(indev) == LV_DIR_BOTTOM && !menu_is_open()
+        && s_snap.link == LINK_BOUND) {
+        lv_indev_wait_release(indev);   // the swipe is not also a tile tap
+        menu_open();
+    }
 }
 
 void ui_start(lv_display_t *disp)
@@ -481,6 +569,9 @@ void ui_start(lv_display_t *disp)
     lv_obj_align(s_step_label, LV_ALIGN_CENTER, 0, 60);
     s_station_label = label(face, &lv_font_montserrat_20, COL_DIM, "");
     lv_obj_align(s_station_label, LV_ALIGN_CENTER, 0, 110);
+
+    menu_create(scr);
+    lv_obj_add_event_cb(scr, screen_gesture, LV_EVENT_GESTURE, NULL);
 
     s_status_panel = lv_obj_create(scr);
     lv_obj_remove_style_all(s_status_panel);

@@ -1,5 +1,6 @@
 #include "flex_api.h"
 
+#include "menu_items.h"
 #include "model.h"
 
 #include <math.h>
@@ -271,6 +272,10 @@ static void handle_slice_status(knob_model_t *m, char *body)
         else if (streq(k, "step"))           s->step = atoi(v);
         else if (streq(k, "tx"))             s->tx = atoi(v) != 0;
         else if (streq(k, "index_letter"))   s->letter = v[0];
+        else if (streq(k, "pan"))            s->pan = parse_handle(v);
+        const char *tracked = menu_tracked_key(true, k);
+        if (tracked)
+            kv_put(&s->kv, tracked, v);
     }
 }
 
@@ -338,6 +343,24 @@ static void handle_client_status(knob_model_t *m, char *body)
     }
 }
 
+// "transmit key=val ..." (TX and CW settings). "transmit band ..." carries
+// per-band settings, not the current ones, and is skipped.
+static void handle_transmit_status(knob_model_t *m, char *body)
+{
+    if (strncmp(body, "band ", 5) == 0)
+        return;
+    char *save;
+    for (char *kv = strtok_r(body, " ", &save); kv; kv = strtok_r(NULL, " ", &save)) {
+        char *eq = strchr(kv, '=');
+        if (!eq)
+            continue;
+        *eq = '\0';
+        const char *tracked = menu_tracked_key(false, kv);
+        if (tracked)
+            kv_put(&m->tx_kv, tracked, eq + 1);
+    }
+}
+
 static void handle_status(knob_model_t *m, char *payload)
 {
     char *space = strchr(payload, ' ');
@@ -351,6 +374,8 @@ static void handle_status(knob_model_t *m, char *payload)
         handle_client_status(m, body);
     else if (streq(payload, "meter"))
         handle_meter_status(m, body);
+    else if (streq(payload, "transmit"))
+        handle_transmit_status(m, body);
     else if (streq(payload, "interlock")) {
         char *st = strstr(body, "state=");
         if (st)
@@ -604,6 +629,40 @@ static int next_step(int current)
     return steps[0];
 }
 
+static bool valid_item(int item) { return item >= 0 && item < g_menu_item_count; }
+
+// Menu and TX-slice actions: menu_items.c builds the commands and updates
+// the model; this sends them.
+static bool menu_action(knob_model_t *m, int n, const knob_action_t *a)
+{
+    menu_cmds_t cmds;
+    int count;
+    switch (a->kind) {
+    case ACT_MENU_ADJUST:
+        count = valid_item(a->item) ? menu_adjust(a->item, n, m, a->arg, cmds) : 0;
+        break;
+    case ACT_MENU_TOGGLE:
+        count = valid_item(a->item) ? menu_toggle(a->item, n, m, cmds) : 0;
+        break;
+    case ACT_MENU_CHOOSE:
+        count = valid_item(a->item) ? menu_choose(a->item, n, m, a->arg, cmds) : 0;
+        break;
+    case ACT_SET_TX: {
+        int t = a->arg;
+        bool ours = t >= 0 && t < KNOB_MAX_SLICES && m->slices[t].in_use
+                    && m->slices[t].client_handle == m->gui_handle;
+        count = ours ? menu_set_tx_slice(t, m, cmds) : 0;
+        break;
+    }
+    default:
+        return false;
+    }
+    for (int i = 0; i < count; ++i)
+        send_cmd("%s", cmds[i]);
+    bump(m);
+    return true;
+}
+
 void flex_api_action(const knob_action_t *a)
 {
     if (!s_connected)
@@ -612,7 +671,7 @@ void flex_api_action(const knob_action_t *a)
     knob_model_t *m = model_get();
     int n;
     knob_slice_t *s = focus(m, &n);
-    if (!s) {
+    if (!s || menu_action(m, n, a)) {
         model_unlock();
         return;
     }
@@ -655,6 +714,8 @@ void flex_api_action(const knob_action_t *a)
         bump(m);
         break;
     }
+    default:
+        break;
     }
     model_unlock();
 }

@@ -28,11 +28,16 @@ typedef enum {
     ACT_TOGGLE_NB,
     ACT_TOGGLE_ANF,
     ACT_AGC_NEXT,      // off -> slow -> med -> fast -> off
+    ACT_MENU_ADJUST,   // item, arg: detents
+    ACT_MENU_TOGGLE,   // item
+    ACT_MENU_CHOOSE,   // item, arg: choice index
+    ACT_SET_TX,        // arg: slice index that gets the TX flag
 } knob_action_kind_t;
 
 typedef struct {
     knob_action_kind_t kind;
     knob_param_t param;
+    int item;          // menu row (menu_items.c)
     int arg;
 } knob_action_t;
 

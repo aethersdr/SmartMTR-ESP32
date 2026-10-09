@@ -1,6 +1,7 @@
 // Host-side test of the SmartSDR client: plays a scripted radio session and
 // checks the commands the knob sends back. Build: make -C test
 #include "../main/flex_api.h"
+#include "../main/menu_items.h"
 #include "../main/model.h"
 
 #include <assert.h>
@@ -44,6 +45,108 @@ static void expect_sent(const char *needle)
         fprintf(stderr, "missing command: %s\n--- sent ---\n%s", needle, sent);
         assert(0);
     }
+}
+
+static int item(const char *label)
+{
+    for (int i = 0; i < g_menu_item_count; ++i)
+        if (strcmp(g_menu_items[i].label, label) == 0)
+            return i;
+    fprintf(stderr, "no menu item %s\n", label);
+    assert(0);
+    return -1;
+}
+
+static void act(knob_action_kind_t kind, const char *label, int arg)
+{
+    knob_action_t a = {.kind = kind, .item = label ? item(label) : 0, .arg = arg};
+    flex_api_action(&a);
+}
+
+static void expect_text(const char *label, const char *want)
+{
+    knob_model_t *m = model_get();
+    char buf[48];
+    int f = model_focus_slice(m);
+    menu_item_text(&g_menu_items[item(label)], &m->slices[f], m, buf, sizeof buf);
+    if (strcmp(buf, want) != 0) {
+        fprintf(stderr, "%s shows '%s', want '%s'\n", label, buf, want);
+        assert(0);
+    }
+}
+
+static void test_menu(void)
+{
+    knob_model_t *m = model_get();
+    feed("S5A0B1C2D|slice 2 mode_list=LSB,USB,CW,DIGU ant_list=ANT1,ANT2,RX_A rit_on=0 rit_freq=0 "
+         "nrl=1 lms_nr_level=30 squelch=1 squelch_level=20 audio_pan=50 lock=0 pan=0x40000000 dax=0\n");
+    feed("S5A0B1C2D|transmit rfpower=50 tunepower=10 mic_level=40 compander=1 compander_level=60 "
+         "sb_monitor=0 mon_gain_sb=50 speed=25 pitch=600 break_in=0\n");
+    feed("S5A0B1C2D|transmit band 20 rfpower=99\n");  // per-band, not current
+    assert(m->slices[2].pan == 0x40000000);
+    expect_text("RF power", "50");
+    expect_text("NR mode", "NRL");
+    expect_text("NR amount", "30");
+    expect_text("Squelch", "On  20");
+    expect_text("Pan", "C");
+    expect_text("RX antenna", "ANT2");
+    expect_text("DAX channel", "Off");
+    expect_text("Band", "20m");
+
+    sent_len = 0;
+    act(ACT_MENU_ADJUST, "NR amount", 5);
+    expect_sent("|slice set 2 lms_nr_level=35\n");      // command key, not status key
+    act(ACT_MENU_CHOOSE, "NR mode", 3);                  // NRS
+    expect_sent("|slice set 2 lms_nr=0\n");
+    expect_sent("|slice set 2 speex_nr=1\n");
+    expect_text("NR mode", "NRS");
+    act(ACT_MENU_CHOOSE, "NR mode", 0);                  // Off
+    expect_sent("|slice set 2 speex_nr=0\n");
+    expect_text("NR amount", "-");
+
+    act(ACT_MENU_ADJUST, "Mic gain", 1);
+    expect_sent("|transmit set miclevel=41\n");
+    act(ACT_MENU_TOGGLE, "Monitor", 0);
+    expect_sent("|transmit set mon=1\n");
+    act(ACT_MENU_TOGGLE, "Compander", 0);
+    expect_sent("|transmit set compander=0\n");
+
+    act(ACT_MENU_ADJUST, "RIT", 3);
+    expect_sent("|slice set 2 rit_freq=30\n");
+    act(ACT_MENU_TOGGLE, "RIT", 0);
+    expect_sent("|slice set 2 rit_on=1\n");
+    expect_text("RIT", "On  +30 Hz");
+
+    act(ACT_MENU_ADJUST, "Pan", -5);
+    expect_sent("|slice set 2 audio_pan=40\n");
+    expect_text("Pan", "L20");
+
+    // USB passband cannot go below 0 Hz (FlexLib UpdateFilter).
+    act(ACT_MENU_ADJUST, "Filter low", -20);
+    expect_sent("|filt 2 0 2850\n");
+    act(ACT_MENU_ADJUST, "Filter high", -100);         // cannot cross the low edge
+    expect_sent("|filt 2 0 50\n");
+
+    act(ACT_MENU_TOGGLE, "Tune lock", 0);
+    expect_sent("|slice lock 2\n");
+    act(ACT_MENU_CHOOSE, "Band", 3);
+    expect_sent("|display pan set 0x40000000 band=40\n");
+
+    // CW-only rows appear with CW, and use `cw` commands.
+    const menu_item_t *speed = &g_menu_items[item("CW speed")];
+    assert(!menu_item_visible(speed, &m->slices[2]));
+    act(ACT_MENU_CHOOSE, "Mode", 2);
+    expect_sent("|slice set 2 mode=CW\n");
+    assert(menu_item_visible(speed, &m->slices[2]));
+    assert(!menu_item_visible(&g_menu_items[item("Filter low")], &(knob_slice_t){.mode = "FM"}));
+    act(ACT_MENU_ADJUST, "CW speed", 1);
+    expect_sent("|cw wpm 26\n");
+
+    act(ACT_SET_TX, NULL, 1);
+    expect_sent("|slice set 1 tx=1\n");
+    assert(m->slices[1].tx && !m->slices[2].tx);
+    act(ACT_SET_TX, NULL, 0);                            // not this station's slice
+    assert(!strstr(sent, "slice set 0 tx=1"));
 }
 
 static void put16(uint8_t *p, uint16_t v) { p[0] = v >> 8; p[1] = v & 0xFF; }
@@ -123,6 +226,7 @@ int main(void)
     knob_action_t agc = {.kind = ACT_AGC_NEXT};
     flex_api_action(&agc);
     expect_sent("|slice set 2 agc_mode=fast\n");
+    test_menu();
 
     // Meters: definitions, then a VITA-49 meter packet.
     feed("S5A0B1C2D|meter 7.src=SLC#7.num=2#7.nam=LEVEL#7.unit=dBm#7.low=-150.0#7.hi=20.0#"

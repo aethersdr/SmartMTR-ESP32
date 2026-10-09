@@ -1,6 +1,8 @@
 // Renders the AetherKnob face on the host with sample radio data, so layout
 // changes can be checked without the board. Build: make -C test/preview
 #include "../../main/board.h"
+#include "../../main/menu.h"
+#include "../../main/menu_items.h"
 #include "../../main/model.h"
 #include "../../main/ui.h"
 #include "../../main/usb_link.h"
@@ -36,11 +38,26 @@ static void slice(knob_slice_t *s, char letter, double mhz, const char *mode, in
     snprintf(s->rxant, sizeof s->rxant, "ANT2");
 }
 
+static void put(knob_kv_t *kv, bool slice, const char *key, const char *value)
+{
+    kv_put(kv, menu_tracked_key(slice, key), value);
+}
+
+// Lets animations and timers run for `ms` of simulated time.
+static void run_for(int ms)
+{
+    for (int t = 0; t < ms; t += 10) {
+        lv_tick_inc(10);
+        lv_timer_handler();
+    }
+}
+
 int main(int argc, char **argv)
 {
     const char *state = argc > 2 ? argv[2] : "bound";
+    bool bound = strcmp(state, "waiting") != 0;
     knob_model_t *m = model_get();
-    if (strcmp(state, "waiting") == 0) {
+    if (!bound) {
         m->link = LINK_WAITING;
     } else {
         m->link = LINK_BOUND;
@@ -49,6 +66,37 @@ int main(int argc, char **argv)
         slice(&m->slices[0], 'A', 14.1725, "USB", 50, 3000, -95.0f, -75.0f, true, true);
         slice(&m->slices[1], 'B', 14.323, "USB", 100, 2800, -98.0f, -69.0f, false, false);
         m->swr = 1.4f; m->comp_db = 8.0f; m->fwd_watts = 0.0f; m->mic_db = -22.0f;
+        knob_kv_t *kv = &m->slices[0].kv;
+        put(kv, true, "mode", "USB");
+        put(kv, true, "mode_list", "LSB,USB,AM,CW,DIGL,DIGU,FM");
+        put(kv, true, "rxant", "ANT2");
+        put(kv, true, "ant_list", "ANT1,ANT2,RX_A,XVTR");
+        put(kv, true, "rit_on", "1");
+        put(kv, true, "rit_freq", "-120");
+        put(kv, true, "agc_mode", "med");
+        put(kv, true, "squelch", "0");
+        put(kv, true, "squelch_level", "20");
+        put(kv, true, "nrl", "1");
+        put(kv, true, "lms_nr_level", "35");
+        put(kv, true, "anf", "0");
+        put(kv, true, "wnb", "0");
+        put(kv, true, "wnb_level", "50");
+        put(kv, true, "audio_mute", "0");
+        put(kv, true, "audio_pan", "50");
+        put(kv, true, "diversity", "0");
+        put(kv, true, "dax", "1");
+        put(kv, true, "lock", "0");
+        put(kv, true, "txant", "ANT1");
+        put(kv, true, "tx_ant_list", "ANT1,ANT2");
+        put(kv, true, "xit_on", "0");
+        put(kv, true, "xit_freq", "0");
+        put(&m->tx_kv, false, "rfpower", "100");
+        put(&m->tx_kv, false, "tunepower", "10");
+        put(&m->tx_kv, false, "mic_level", "45");
+        put(&m->tx_kv, false, "compander", "1");
+        put(&m->tx_kv, false, "compander_level", "60");
+        put(&m->tx_kv, false, "sb_monitor", "0");
+        put(&m->tx_kv, false, "mon_gain_sb", "50");
     }
     m->revision = 1;
 
@@ -59,6 +107,14 @@ int main(int argc, char **argv)
     lv_display_set_buffers(d, buf, NULL, sizeof buf, LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(d, flush);
     ui_start(d);
+    if (strncmp(state, "menu", 4) == 0) {
+        menu_open();
+        run_for(400);
+        if (strcmp(state, "menu_tx") == 0) {
+            menu_knob_turn(9);          // clockwise: down the list to TRANSMIT
+            run_for(600);
+        }
+    }
     lv_refr_now(d);
 
     FILE *f = fopen(argc > 1 ? argv[1] : "face.ppm", "wb");

@@ -22,6 +22,35 @@ so the knob is an independent SmartSDR API client. It binds to the AetherSDR
 | Long-press NR / NB / ANF | Toggle it on or off |
 | Long-press AGC or AF | Cycle AGC mode (off/slow/med/fast) |
 | Long-press FILT | Next tuning step |
+| Tap a slice's **TX** label | Make that slice the transmit slice (grey = not TX, red outline = TX, filled = on air) |
+| Swipe down | Open the menu (below) |
+
+### Menu
+
+Swipe down anywhere on the face to open it. It shows a scrolling list of
+values for the active slice and the transmitter:
+
+- Tap a row to put it on the knob (yellow outline); tap it again to release it.
+- With no row selected, the knob scrolls the list.
+- Tap an on/off row (Mute, Diversity, Tune lock, Break-in) to flip it.
+- Long-press a row that has a level and a switch (RIT, XIT, Squelch, WNB, APF,
+  Compander, Monitor) to flip its switch.
+- For list rows (Mode, antennas, Band, AGC mode, NR/ANF mode), the knob
+  previews the choice in yellow. It is sent once the knob rests for 0.7 s.
+
+To close it, tap the grip at the bottom, swipe up from the grip, press the
+knob, or leave it for 8 s.
+
+Rows:
+
+- **Receive:** Mode, RX antenna, Band, RIT, Filter low/high, AGC mode,
+  Squelch, NR mode (NR/NRL/NRS/RNN/NRF) and amount, ANF mode (ANF/ANFL/ANFT)
+  and amount, WNB, APF (CW only), Mute, Pan, Diversity, DAX channel, Tune lock.
+- **Transmit:** RF power, Tune power, Mic gain, Compander, Monitor, TX antenna,
+  XIT, and in CW also CW speed, CW pitch and Break-in.
+
+Nothing in the menu keys the transmitter. VOX and TUNE are deliberately left
+out. To add a row, add one entry to the table in `main/menu_items.c`.
 
 Tiles: **AF** (audio level), **AGC** (threshold), **FILT** (width, 50 Hz per click,
 about the passband centre), and **NR / NB / ANF** (level).
@@ -66,6 +95,8 @@ needs AetherSDR with AetherKnob support (the `AETHER_KNOB` product string).
 | `main/ctr2_link.{c,h}` | Link framing, MIT, copied from AetherSDR `tools/ctr2-firmware-reference` |
 | `main/flex_api.c` | SmartSDR API client: bind, slices, commands, VITA-49 meters |
 | `main/ui.c` | LVGL 9 face |
+| `main/menu_items.c` | Menu rows: keys, ranges, commands (host-tested) |
+| `main/menu.c` | Swipe-down menu screen |
 | `test/` | Host test of the API client (`make -C test check`) |
 | `docs/smartsdr-api-notes.md` | Protocol facts the client relies on, from FlexLib |
 
