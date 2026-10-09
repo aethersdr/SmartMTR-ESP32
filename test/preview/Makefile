@@ -8,6 +8,7 @@ preview: $(SRCS) lv_conf.h
 faces: preview
 	./preview face.ppm bound && magick face.ppm face.png
 	./preview peaks.ppm peaks && magick peaks.ppm peaks.png
+	./preview tx.ppm tx && magick tx.ppm tx.png
 	./preview span600.ppm span600 && magick span600.ppm span600.png
 	./preview span12k.ppm span12k && magick span12k.ppm span12k.png
 	./preview waiting.ppm waiting && magick waiting.ppm waiting.png

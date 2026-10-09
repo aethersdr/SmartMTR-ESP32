@@ -366,6 +366,7 @@ static lv_obj_t *s_tiles_box, *s_spectrum;
 static dock_view_t s_dock = DOCK_TILES;
 static uint8_t s_bars[64], s_peaks[64];
 static int s_bar_count;
+static bool s_spectrum_tx;            // bars drawn in the TX colour (transmit audio)
 static int s_span_hz;                 // what the axis is labelled for
 #define AXIS_LABELS 5
 static lv_obj_t *s_axis[AXIS_LABELS];
@@ -410,7 +411,7 @@ static void spectrum_draw(lv_event_t *e)
     const int slot = (x1 - x0) / s_bar_count;
     lv_draw_rect_dsc_t bar;
     lv_draw_rect_dsc_init(&bar);
-    bar.bg_color = COL_SCALE;
+    bar.bg_color = s_spectrum_tx ? COL_LEVEL : COL_SCALE;
     bar.bg_opa = LV_OPA_COVER;
     lv_draw_rect_dsc_t peak = bar;
     peak.bg_color = COL_TEXT;
@@ -503,6 +504,12 @@ static void spectrum_panel(lv_obj_t *parent)
 // New frame from the model: copy it and let peaks fall toward the bars.
 static void update_spectrum(const knob_model_t *v)
 {
+    // While transmitting AetherSDR sends the transmit audio; draw it in red.
+    if (v->transmitting != s_spectrum_tx) {
+        s_spectrum_tx = v->transmitting;
+        if (s_dock == DOCK_SPECTRUM)
+            lv_obj_invalidate(s_spectrum);
+    }
     if (v->spectrum_bars <= 0 || v->spectrum_ms == s_spectrum_stamp)
         return;
     if (!spectrum_live())

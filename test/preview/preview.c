@@ -303,6 +303,13 @@ int main(int argc, char **argv)
         model_get()->revision++;
         run_for(50);
     }
+    if (strcmp(state, "tx") == 0) {
+        m->transmitting = true;
+        m->fwd_watts = 85.0f;
+        m->spectrum_ms += 10;
+        m->revision++;
+        run_for(100);
+    }
     int span = strcmp(state, "span600") == 0 ? 600 : strcmp(state, "span12k") == 0 ? 12000 : 0;
     if (span) {
         m->spectrum_span_hz = span;

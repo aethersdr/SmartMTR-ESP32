@@ -87,7 +87,8 @@ out. To add a row, add one entry to the table in `main/menu_items.c`.
 With an AetherSDR that sends it, the centre shows a 32-bar spectrum (with peak
 hold) of the receive audio you are hearing, like SmartMTR's: after the radio's
 DSP, AetherSDR's noise reduction and its RX chain up to and including the EQ.
-It spans 0 Hz to the active slice's filter width, so a 600 Hz CW filter shows
+While transmitting it shows your transmit audio in red, across the TX filter
+width. Otherwise it spans 0 Hz to the active slice's filter width, so a 600 Hz CW filter shows
 0–600 Hz and a 6 kHz SSB filter 0–6 kHz (at most 12 kHz, the limit of the
 24 kHz audio). The scale relabels itself to match. **Tap** it to show the tiles below instead; they return to the
 spectrum after 8 s unused, unless a tile is on the dial. A **sideways
