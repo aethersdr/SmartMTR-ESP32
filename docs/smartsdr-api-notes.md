@@ -42,3 +42,26 @@ authority) and cross-checked against AetherSDR's client.
 - VITA-49, big-endian. Meters: ExtDataWithStream, OUI 0x001C2D,
   packet class 0x8002. Payload = (uint16 id, int16 value) pairs; last wins.
 - Link budget ~7 KB/s; the host drops datagrams beyond ~3 KB queued.
+
+## Menu values: command key vs status key
+
+FlexLib v4.1.5; the radio reports some values under a different key than the
+one that sets them.
+
+| Set with | Reported as |
+| --- | --- |
+| `slice set N lms_nr=` / `speex_nr=` / `rnnoise=` / `lms_anf=` | `nrl` / `nrs` / `rnn` / `anfl` |
+| `transmit set miclevel=` | `mic_level` |
+| `transmit set mon=` | `sb_monitor` |
+| `transmit set am_carrier=` | `am_carrier_level` |
+| `cw wpm N` | `speed` (on `transmit`) |
+| `cw pitch N` | `pitch` (on `transmit`, radio-wide) |
+
+- Filter edges: `filt N lo hi`; FM/NFM refuse changes; USB/DIGU/FDV lo ≥ 0;
+  LSB/DIGL hi ≤ 0; CW ±(12000 − pitch); width ≥ 50 Hz.
+- Band: `display pan set 0x<pan> band=<id>` (pan from the slice's `pan=`);
+  ids 160…6, 33 = WWV, 34 = GEN. The radio recalls the band stack and may
+  re-create the slice.
+- Tune lock: `slice lock N` / `slice unlock N`, status `lock`.
+- `transmit band …` status lines are per-band settings, not current ones.
+- NRL/NRS/RNN/NRF/ANFL/ANFT are FLEX-8000/Aurora features; a 6000 ignores them.
