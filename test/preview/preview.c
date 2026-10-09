@@ -303,6 +303,13 @@ int main(int argc, char **argv)
         model_get()->revision++;
         run_for(50);
     }
+    int span = strcmp(state, "span600") == 0 ? 600 : strcmp(state, "span12k") == 0 ? 12000 : 0;
+    if (span) {
+        m->spectrum_span_hz = span;
+        m->spectrum_ms += 10;
+        m->revision++;
+        run_for(100);
+    }
     if (strcmp(state, "peaks") == 0) {
         // A second frame with one bar fallen, to show its peak-hold mark.
         m->spectrum[5] = 120;

@@ -366,6 +366,10 @@ static lv_obj_t *s_tiles_box, *s_spectrum;
 static dock_view_t s_dock = DOCK_TILES;
 static uint8_t s_bars[64], s_peaks[64];
 static int s_bar_count;
+static int s_span_hz;                 // what the axis is labelled for
+#define AXIS_LABELS 5
+static lv_obj_t *s_axis[AXIS_LABELS];
+static lv_obj_t *s_axis_unit;
 static uint32_t s_spectrum_seen_ms;   // lv_tick when the last frame arrived
 static uint32_t s_spectrum_stamp;     // model stamp of that frame
 static uint32_t s_live_since_ms;      // start of the current unbroken run of frames
@@ -423,6 +427,49 @@ static void spectrum_draw(lv_event_t *e)
     }
 }
 
+// Labels 0..span on a clean step (100/200/250/500 Hz, 1/2/2.5/5 kHz) with at
+// most four intervals, each centred where that frequency falls on the bars;
+// the unit goes in the panel's top-right corner.
+static void label_axis(int span)
+{
+    static const int steps[] = {100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000};
+    int step = steps[0];
+    for (size_t i = 0; i < sizeof steps / sizeof steps[0]; ++i) {
+        step = steps[i];
+        if (span / step <= 4)
+            break;
+    }
+    const bool khz = step >= 1000;
+    const int pad = 10, w = DOCK_W - 2 * pad;
+    int ticks = span / step + 1;
+    if (ticks > AXIS_LABELS)
+        ticks = AXIS_LABELS;
+    for (int i = 0; i < AXIS_LABELS; ++i) {
+        lv_obj_t *l = s_axis[i];
+        if (i >= ticks) {
+            lv_obj_set_hidden(l, true);
+            continue;
+        }
+        const int hz = i * step;
+        char t[12];
+        if (khz && hz % 1000)
+            snprintf(t, sizeof t, "%d.%d", hz / 1000, hz % 1000 / 100);
+        else if (khz)
+            snprintf(t, sizeof t, "%d", hz / 1000);
+        else
+            snprintf(t, sizeof t, "%d", hz);
+        ui_set_text(l, t);
+        int x = pad + (int)((long)hz * w / span) - 20;   // centred on its frequency
+        if (x < 0)
+            x = 0;
+        if (x > DOCK_W - 40)
+            x = DOCK_W - 40;
+        lv_obj_align(l, LV_ALIGN_BOTTOM_LEFT, x, -1);
+        lv_obj_set_hidden(l, false);
+    }
+    ui_set_text(s_axis_unit, khz ? "kHz" : "Hz");
+}
+
 static void spectrum_event(lv_event_t *e)
 {
     (void)e;
@@ -441,13 +488,15 @@ static void spectrum_panel(lv_obj_t *parent)
     lv_obj_set_scrollable(s_spectrum, false);
     lv_obj_add_event_cb(s_spectrum, spectrum_draw, LV_EVENT_DRAW_MAIN_END, NULL);
     lv_obj_add_event_cb(s_spectrum, spectrum_event, LV_EVENT_SHORT_CLICKED, NULL);
-    // kHz scale along the bottom; 0..4 matches the span AetherSDR sends.
-    for (int k = 0; k <= 4; ++k) {
-        char t[4];
-        snprintf(t, sizeof t, "%d", k);
-        lv_obj_t *l = label(s_spectrum, &lv_font_montserrat_14, COL_TEXT, t);
-        lv_obj_align(l, LV_ALIGN_BOTTOM_LEFT, 6 + k * (DOCK_W - 24) / 4, -1);
+    // Frequency scale along the bottom; relabelled when the span changes.
+    for (int i = 0; i < AXIS_LABELS; ++i) {
+        s_axis[i] = label(s_spectrum, &lv_font_montserrat_14, COL_TEXT, "");
+        lv_obj_set_width(s_axis[i], 40);
+        lv_obj_set_style_text_align(s_axis[i], LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_hidden(s_axis[i], true);
     }
+    s_axis_unit = label(s_spectrum, &lv_font_montserrat_14, COL_TEXT, "");
+    lv_obj_align(s_axis_unit, LV_ALIGN_TOP_RIGHT, -8, 4);
     lv_obj_set_hidden(s_spectrum, true);
 }
 
@@ -460,6 +509,10 @@ static void update_spectrum(const knob_model_t *v)
         s_live_since_ms = lv_tick_get();   // a new run of frames starts
     s_spectrum_stamp = v->spectrum_ms;
     s_spectrum_seen_ms = lv_tick_get();
+    if (v->spectrum_span_hz > 0 && v->spectrum_span_hz != s_span_hz) {
+        s_span_hz = v->spectrum_span_hz;
+        label_axis(s_span_hz);
+    }
     s_bar_count = v->spectrum_bars;
     for (int i = 0; i < s_bar_count; ++i) {
         s_bars[i] = v->spectrum[i];
