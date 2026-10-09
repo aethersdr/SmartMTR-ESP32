@@ -229,8 +229,6 @@ static void apply_meter(knob_model_t *m, int id, int16_t raw)
             knob_slice_t *sl = &m->slices[s];
             if (sl->level_meter == id) {
                 sl->level_dbm = v;
-                if (v > sl->level_peak_dbm)
-                    sl->level_peak_dbm = v;
             }
         }
     }
@@ -253,7 +251,7 @@ static void handle_slice_status(knob_model_t *m, char *body)
         memset(s, 0, sizeof *s);
         s->level_meter = meter;
         s->letter = (char)('A' + n);
-        s->level_dbm = s->level_peak_dbm = -127.0f;
+        s->level_dbm = -127.0f;
     }
     s->in_use = true;
 
@@ -600,12 +598,6 @@ void flex_api_tick(uint32_t now_ms)
         register_udp(m->our_handle);
     if (s_pending_detents && now_ms - s_last_tune_ms >= TUNE_MIN_GAP_MS)
         flush_tune(m);
-    // Peak-hold decays 10 dB/s toward the live level.
-    for (int i = 0; i < KNOB_MAX_SLICES; ++i) {
-        knob_slice_t *s = &m->slices[i];
-        if (s->level_peak_dbm > s->level_dbm)
-            s->level_peak_dbm = fmaxf(s->level_dbm, s->level_peak_dbm - 0.5f);
-    }
     model_unlock();
 }
 

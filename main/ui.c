@@ -3,6 +3,7 @@
 #include "board.h"
 #include "menu.h"
 #include "menu_items.h"
+#include "meter_ballistics.h"
 #include "model.h"
 #include "usb_link.h"
 
@@ -44,6 +45,9 @@ typedef struct {
     lv_obj_t *tx;
     bool top;
     int slice;          // slice shown, -1 for none (the TX badge's target)
+    int meter_slice;    // slice the ballistics below belong to
+    meter_smoother_t bar;       // SmartMTR bar ballistics
+    meter_extremes_t extremes;  // SmartMTR peak marker
     int tx_state;       // last drawn TX badge state
     int32_t peak_angle;
 } slice_view_t;
@@ -82,20 +86,24 @@ static uint32_t s_dial_down_ms;
 static bool s_locked_drawn;
 static knob_model_t s_snap;
 static uint32_t s_tiles_used_ms;     // last tile touch, for the dock's return to the spectrum
+static uint32_t s_last_frame_ms;     // for the meter ballistics' elapsed time
 
 // ---------------------------------------------------------------- geometry
 
 // Fraction 0..1 along the S-meter for a level in dBm.
+// Fraction 0..1 along the S-meter for a level in dBm, as AetherSDR's SmartMTR
+// maps it (SmartMtrConfig mapSignal): S0..S9 fill the lower half and S9..S9+60
+// the upper half, each linear in dBm, so S9 sits at the midpoint.
 static float smeter_fraction(float dbm)
 {
     const float s0 = -127.0f, s9 = -73.0f, top = -13.0f;  // S9+60
     if (dbm <= s0)
         return 0.0f;
     if (dbm <= s9)
-        return 0.6f * (dbm - s0) / (s9 - s0);
+        return 0.5f * (dbm - s0) / (s9 - s0);
     if (dbm >= top)
         return 1.0f;
-    return 0.6f + 0.4f * (dbm - s9) / (top - s9);
+    return 0.5f + 0.5f * (dbm - s9) / (top - s9);
 }
 
 static void polar(int cx, int cy, float r, float deg, int32_t *x, int32_t *y)
@@ -238,6 +246,7 @@ static void slice_view(lv_obj_t *parent, slice_view_t *v, bool top)
     lv_obj_add_event_cb(v->tx, tx_badge_event, LV_EVENT_SHORT_CLICKED, v);
     lv_obj_set_hidden(v->tx, true);
     v->slice = -1;
+    v->meter_slice = -2;    // forces a fresh start on the first frame
     v->tx_state = -1;
     v->peak_angle = INT32_MIN;
     v->filter = label(parent, &lv_font_montserrat_20, COL_DIM, "");
@@ -610,22 +619,11 @@ static void show_slice(slice_view_t *v, const knob_slice_t *s, int index, bool t
     char buf[32];
     v->slice = s ? index : -1;
     if (!s) {
-        lv_arc_set_value(v->arc, 0);
-        lv_arc_set_value(v->peak, 0);
         ui_set_text(v->freq, v->top ? "--.---.---" : "");
         ui_set_text(v->mode, "");
         ui_set_text(v->filter, "");
         show_tx_badge(v, TX_HIDDEN);
         return;
-    }
-    float f = smeter_fraction(s->level_dbm);
-    float pk = smeter_fraction(s->level_peak_dbm);
-    lv_arc_set_value(v->arc, (int32_t)(f * 1000));
-    // Peak-hold sliver, two degrees wide, centred on the peak.
-    int32_t a = (int32_t)lroundf(meter_angle(v->top, pk));
-    if (a != v->peak_angle) {
-        v->peak_angle = a;
-        lv_arc_set_angles(v->peak, a - 1, a + 1);
     }
     format_freq(buf, sizeof buf, s->freq_mhz);
     ui_set_text(v->freq, buf);
@@ -633,6 +631,35 @@ static void show_slice(slice_view_t *v, const knob_slice_t *s, int index, bool t
     ui_set_textf(v->filter, "%d-%d  %s", s->filter_lo, s->filter_hi, s->rxant);
     show_tx_badge(v, !s->tx ? TX_OTHER : transmitting ? TX_ON_AIR : TX_SLICE);
     lv_obj_align_to(v->tx, v->mode, LV_ALIGN_OUT_LEFT_MID, -10, 0);
+}
+
+// Every frame: the S-meter bar and its peak marker, with AetherSDR's
+// SmartMTR ballistics (meter_ballistics.c). A view that switches to another
+// slice starts fresh, so one slice's history never shows on another.
+static void meter_tick(slice_view_t *v, const knob_slice_t *s, int index, uint32_t now,
+                       uint32_t elapsed)
+{
+    if (index != v->meter_slice) {
+        v->meter_slice = index;
+        meter_extremes_reset(&v->extremes);
+        v->bar.target = v->bar.display = s ? smeter_fraction(s->level_dbm) : 0.0f;
+    }
+    if (s) {
+        meter_smoother_set_target(&v->bar, smeter_fraction(s->level_dbm));
+        meter_extremes_record(&v->extremes, s->level_dbm, now);
+    } else {
+        meter_smoother_set_target(&v->bar, 0.0f);
+    }
+    meter_smoother_tick(&v->bar, elapsed);
+    meter_extremes_tick(&v->extremes, now, elapsed, v->bar.display, smeter_fraction);
+
+    lv_arc_set_value(v->arc, (int32_t)lroundf(v->bar.display * 1000.0f));
+    // Peak marker: a sliver two degrees wide, centred on the window maximum.
+    int32_t a = (int32_t)lroundf(meter_angle(v->top, v->extremes.max_pos));
+    if (a != v->peak_angle) {
+        v->peak_angle = a;
+        lv_arc_set_angles(v->peak, a - 1, a + 1);
+    }
 }
 
 static void show_tiles(const knob_slice_t *s)
@@ -775,6 +802,15 @@ static void refresh(lv_timer_t *timer)
     dock_tick();
     int focus = model_focus_slice(v);
     menu_update(v, focus, changed);
+
+    // Meters animate every frame, between radio updates too.
+    const uint32_t now = lv_tick_get();
+    const uint32_t elapsed = s_last_frame_ms ? now - s_last_frame_ms : 0;
+    s_last_frame_ms = now;
+    const int other_meter = focus >= 0 ? other_slice(v, focus) : -1;
+    meter_tick(&s_top, focus >= 0 ? &v->slices[focus] : NULL, focus, now, elapsed);
+    meter_tick(&s_bottom, other_meter >= 0 ? &v->slices[other_meter] : NULL, other_meter, now,
+               elapsed);
     if (!changed)
         return;
 

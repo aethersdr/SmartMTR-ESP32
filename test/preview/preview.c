@@ -51,7 +51,8 @@ static void slice(knob_slice_t *s, char letter, double mhz, const char *mode, in
                         .filter_hi = hi, .active = active, .client_handle = 0x33333333,
                         .audio_level = 50, .agc_threshold = 65, .nr = true, .nr_level = 40,
                         .nb_level = 50, .anf_level = 30, .step = 100, .tx = tx,
-                        .level_dbm = dbm, .level_peak_dbm = peak};
+                        .level_dbm = dbm};
+    (void)peak;   // the peak marker now comes from the SmartMTR window, not the model
     snprintf(s->mode, sizeof s->mode, "%s", mode);
     snprintf(s->agc_mode, sizeof s->agc_mode, "med");
     snprintf(s->rxant, sizeof s->rxant, "ANT2");

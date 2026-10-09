@@ -2,6 +2,7 @@
 // checks the commands the knob sends back. Build: make -C test
 #include "../main/flex_api.h"
 #include "../main/menu_items.h"
+#include "../main/meter_ballistics.h"
 #include "../main/model.h"
 
 #include <assert.h>
@@ -196,11 +197,61 @@ static void test_menu(void)
     assert(!strstr(sent, "slice set 0 tx=1"));
 }
 
+// S-meter mapping AetherSDR's SmartMTR uses: S0..S9 lower half, S9..+60 upper.
+static float frac(float dbm)
+{
+    if (dbm <= -127.0f) return 0.0f;
+    if (dbm <= -73.0f) return 0.5f * (dbm + 127.0f) / 54.0f;
+    if (dbm >= -13.0f) return 1.0f;
+    return 0.5f + 0.5f * (dbm + 73.0f) / 60.0f;
+}
+
+// The port matches AetherSDR's SmartMtrWidget: MeterSmoother time constants,
+// MeterExtremes' 3 s window and 60-unit/s slew, and the marker >= bar clamp.
+static void test_meter_ballistics(void)
+{
+    meter_smoother_t bar = {0};
+    meter_smoother_set_target(&bar, 1.0f);
+    meter_smoother_tick(&bar, 18);                      // one attack time constant (18.2 ms)
+    assert(fabsf(bar.display - (1.0f - expf(-18.0f / 18.18f))) < 1e-4f);
+    bar.display = 1.0f;
+    meter_smoother_set_target(&bar, 0.0f);
+    meter_smoother_tick(&bar, 269);                     // one release time constant (269.4 ms)
+    assert(fabsf(bar.display - expf(-269.0f / 269.4f)) < 1e-3f);
+
+    // S9 for a second, then nothing: the bar sags, the marker holds the window
+    // maximum for 3 s after the last S9 sample, then glides at 60/220 per second.
+    meter_smoother_t b = {0};
+    meter_extremes_t e;
+    meter_extremes_reset(&e);
+    uint32_t t = 0;
+    float level = -73.0f;
+    for (; t <= 5500; t += 33) {
+        if (t >= 1000)
+            level = -127.0f;
+        meter_smoother_set_target(&b, frac(level));
+        meter_extremes_record(&e, level, t);
+        meter_smoother_tick(&b, 33);
+        meter_extremes_tick(&e, t, 33, b.display, frac);
+        assert(e.max_pos >= b.display - 1e-6f);         // never below the bar
+        if (t == 990)
+            assert(fabsf(e.max_pos - 0.5f) < 1e-3f);    // the bar pushed it straight up to S9
+        if (t >= 1500 && t <= 3960)
+            assert(fabsf(e.max_pos - 0.5f) < 1e-3f);    // held: S9 still in the 3 s window
+        if (t >= 1500 && t <= 3960)
+            assert(b.display < 0.2f);                   // while the bar has sagged
+    }
+    // Last S9 sample at t = 990, window expired after t = 3990; ~1.5 s of
+    // glide at 60/220 per second has taken it down by about 0.41.
+    assert(e.max_pos < 0.5f - 0.35f && e.max_pos > 0.0f);
+}
+
 static void put16(uint8_t *p, uint16_t v) { p[0] = v >> 8; p[1] = v & 0xFF; }
 static void put32(uint8_t *p, uint32_t v) { put16(p, v >> 16); put16(p + 2, v & 0xFFFF); }
 
 int main(void)
 {
+    test_meter_ballistics();
     flex_api_init(tcp, udp);
     flex_api_tick(1000);
     flex_api_connected();

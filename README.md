@@ -82,6 +82,18 @@ Rows:
 Nothing in the menu keys the transmitter. VOX and TUNE are deliberately left
 out. To add a row, add one entry to the table in `main/menu_items.c`.
 
+### S-meters
+
+The bars and their white peak markers use AetherSDR's SmartMTR ballistics
+(`main/meter_ballistics.c`, ported from `SmartMtrWidget`):
+
+- **Bar:** jumps up in about 18 ms and sags back in about 270 ms.
+- **Peak marker:** shows the highest level of the last 3 s. Once that peak
+  leaves the window, the marker glides down at a steady rate, and it never
+  sits below the bar.
+- **Scale:** as in SmartMTR, S9 sits at the midpoint, with S0 to S9 on one
+  side and S9 to +60 on the other.
+
 ### Centre: spectrum or tiles
 
 With an AetherSDR that sends it, the centre shows a 32-bar spectrum (with peak

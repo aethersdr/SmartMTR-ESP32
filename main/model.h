@@ -52,7 +52,6 @@ typedef struct {
     bool tx;
     int level_meter;           // meter id of this slice's S-meter, or KNOB_NO_METER
     float level_dbm;
-    float level_peak_dbm;      // decaying peak for the extremes arc
     uint32_t pan;              // panadapter stream id, for band changes
     knob_kv_t kv;              // menu values
 } knob_slice_t;
