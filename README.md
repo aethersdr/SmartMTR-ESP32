@@ -103,6 +103,15 @@ report `0x02` (see AetherSDR `docs/ctr2-usb-relay-design.md`,
 Tiles: **AF** (audio level), **AGC** (threshold), **FILT** (width, 50 Hz per detent,
 about the passband centre), and **NR / NB / ANF** (level).
 
+## Connections (back of the board)
+
+| Connector | Pins | Use |
+| --- | --- | --- |
+| **USB-5V-IN** (4-pin MX1.25) | VCC, D−, D+, GND | Power and native USB to the PC, through the MX1.25-to-USB cable that ships with the board. This carries the HID link to AetherSDR and is also the flashing port. |
+| **UART** (4-pin) | RX, TX, 5V, GND | Firmware logs at 115200. Use a 3.3 V USB-serial adapter, and leave its power pin off the 5V pin. |
+| **I2C** (4-pin) | SCL, SDA, 5V, GND | Spare. It is the same bus as the touch controller (0x15) and the PCF8574 (0x21), so an added device needs another address. |
+| **RESET**, **BOOT** | | Flashing, below. |
+
 ## Build and flash
 
 Requires ESP-IDF 6.0 or later.
