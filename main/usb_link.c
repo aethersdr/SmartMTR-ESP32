@@ -18,7 +18,7 @@
 
 static const char *TAG = "usb_link";
 
-// Identity AetherSDR's CTR2 relay recognises (Ctr2HidPort::knownCtr2Devices).
+// Identity AetherSDR's CTR2 relay recognizes (Ctr2HidPort::knownCtr2Devices).
 #define USB_VID      0x303A
 #define USB_PID      0x1001
 #define USB_PRODUCT  "AETHER_KNOB"

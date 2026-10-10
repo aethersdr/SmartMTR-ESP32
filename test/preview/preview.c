@@ -58,7 +58,7 @@ static void slice(knob_slice_t *s, char letter, double mhz, const char *mode, in
     snprintf(s->rxant, sizeof s->rxant, "ANT2");
 }
 
-// Speech through a ~3 kHz SSB filter, sampled at each bar's centre on the
+// Speech through a ~3 kHz SSB filter, sampled at each bar's center on the
 // log axis AetherSDR uses (bar edges from ctr2_spectrum_band_edge).
 static void voice_spectrum(knob_model_t *m, int low, int span)
 {
@@ -94,7 +94,7 @@ static void run_for(int ms)
     }
 }
 
-// The control of `type` in the menu row labelled `name`.
+// The control of `type` in the menu row labeled `name`.
 static lv_obj_t *find_in_row(lv_obj_t *obj, const char *name, const lv_obj_class_t *type)
 {
     for (uint32_t i = 0; i < lv_obj_get_child_count(obj); ++i) {
@@ -189,7 +189,7 @@ static int touch_test(void)
     lv_indev_set_type(finger, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(finger, finger_read);
 
-    // Centre dock: spectrum by default, a tap shows the tiles, a sideways
+    // Center dock: spectrum by default, a tap shows the tiles, a sideways
     // swipe brings the spectrum back.
     fresh_spectrum();
     run_for(100);
@@ -377,12 +377,12 @@ int main(int argc, char **argv)
         m->revision++;
         run_for(100);
         lv_refr_now(d);
-        // Dock: 212 px wide, centred on x = 240; bars end at its right edge - 10.
-        const int right = 240 + 212 / 2 - 10, y = 240 + 8;   // dock centre row
+        // Dock: 212 px wide, centered on x = 240; bars end at its right edge - 10.
+        const int right = 240 + 212 / 2 - 10, y = 240 + 8;   // dock center row
         uint32_t px_in = s_fb[y * 480 + right - 3], px_out = s_fb[y * 480 + right + 4];
         int in_r = (px_in >> 16) & 0xFF, in_g = (px_in >> 8) & 0xFF, in_b = px_in & 0xFF;
         int out_b = px_out & 0xFF, out_g = (px_out >> 8) & 0xFF;
-        bool bar_at_edge = in_g > 150 && in_b > 200 && in_r < 120;     // the cyan bar colour
+        bool bar_at_edge = in_g > 150 && in_b > 200 && in_r < 120;     // the cyan bar color
         bool panel_beyond = !(out_g > 150 && out_b > 200);
         printf("geomtest: pixel at x=%d is %06x, at x=%d is %06x\n", right - 3, px_in & 0xFFFFFF,
                right + 4, px_out & 0xFFFFFF);

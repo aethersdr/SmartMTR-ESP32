@@ -19,7 +19,7 @@
 #define COL_SELECT  lv_color_hex(0xFFD60A)
 
 // Every setting row is the same height, fader or not, so each one is an
-// equally easy target on the touchscreen. Rows without a fader centre their
+// equally easy target on the touchscreen. Rows without a fader center their
 // name and switch in it.
 #define ROW_HEIGHT      74
 #define IDLE_CLOSE_MS   8000

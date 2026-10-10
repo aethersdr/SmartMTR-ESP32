@@ -21,7 +21,7 @@ static const char *const k_anf_levels[] = {"anf_level", "lms_anf_level", NULL};
 static const char *const k_agc[] = {"off", "slow", "med", "fast", NULL};
 static const char *const k_agc_labels[] = {"Off", "Slow", "Med", "Fast", NULL};
 
-// Band ids for `display pan set ... band=` (AetherSDR XvtrPolicy): metres,
+// Band ids for `display pan set ... band=` (AetherSDR XvtrPolicy): meters,
 // 33 = WWV, 34 = general coverage.
 static const char *const k_bands[] = {"160", "80", "60", "40", "30", "20", "17", "15",
                                       "12", "10", "6", "33", "34", NULL};

@@ -638,11 +638,11 @@ static void adjust(knob_model_t *m, int n, knob_slice_t *s, knob_param_t p, int 
         send_cmd("slice set %d anf_level=%d", n, s->anf_level);
         break;
     case PARAM_FILTER_WIDTH: {
-        // Widen/narrow symmetrically about the passband centre, 50 Hz/detent.
+        // Widen/narrow symmetrically about the passband center, 50 Hz/detent.
         int lo = s->filter_lo, hi = s->filter_hi;
         int width = clampi(hi - lo + detents * 50, 50, 12000);
-        int centre = (lo + hi) / 2;
-        lo = centre - width / 2;
+        int center = (lo + hi) / 2;
+        lo = center - width / 2;
         hi = lo + width;
         s->filter_lo = lo;
         s->filter_hi = hi;

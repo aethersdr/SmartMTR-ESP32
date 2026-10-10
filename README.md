@@ -5,7 +5,7 @@
 ### Based on SmartMTR by Dariusz Socha, SQ5X
 
 The design of this dial — the round face, the S-meter arcs, the side gauges,
-the centre dock, its layout and styling — comes from
+the center dock, its layout and styling — comes from
 **[SmartMTR](https://smartmtr.net/)**, created by **Dariusz Socha (SQ5X)**.
 
 This port is published with his kind permission. All credit for the SmartMTR
@@ -15,7 +15,7 @@ design is his: **https://smartmtr.net/**
 
 A FlexRadio controller on the **Elecrow CrowPanel 2.1" HMI ESP32 Rotary
 Display** (DHE03921D: ESP32-S3R8, 480×480 round IPS touch screen, rotary dial that also clicks).
-The face is modelled on [SmartMTR](https://smartmtr.net/) by Dariusz Socha, SQ5X: S-meter arcs for two
+The face is modeled on [SmartMTR](https://smartmtr.net/) by Dariusz Socha, SQ5X: S-meter arcs for two
 slices, SWR/COMP/PWR/MIC needles, and the frequency readout, with a dock of touch
 tiles in the middle.
 
@@ -42,7 +42,7 @@ There are two kinds of input, and this document keeps their names apart:
 | Touch-and-hold NR / NB / ANF | Toggle it on or off |
 | Touch-and-hold AGC or AF | Step AGC mode (off/slow/med/fast) |
 | Touch-and-hold FILT | Next tuning step |
-| Tap a slice's **TX** label | Make that slice the transmit slice (grey = not TX, red outline = TX, filled = on air) |
+| Tap a slice's **TX** label | Make that slice the transmit slice (gray = not TX, red outline = TX, filled = on air) |
 | Swipe down | Open the menu (below) |
 
 ### Menu
@@ -107,16 +107,16 @@ The bars and their white peak markers use AetherSDR's SmartMTR ballistics
 - **Scale:** as in SmartMTR, S9 sits at the midpoint, with S0 to S9 on one
   side and S9 to +60 on the other.
 
-### Centre: spectrum or tiles
+### Center: spectrum or tiles
 
-With an AetherSDR that sends it, the centre shows a 32-bar spectrum (with peak
+With an AetherSDR that sends it, the center shows a 32-bar spectrum (with peak
 hold) of the receive audio you are hearing, like SmartMTR's: after the radio's
 DSP, AetherSDR's noise reduction and its RX chain up to and including the EQ.
 While transmitting it shows your transmit audio in red, across the TX filter
 width. Otherwise it spans 0 Hz to the active slice's filter width, so a 600 Hz CW filter shows
 0–600 Hz and a 6 kHz SSB filter 0–6 kHz (at most 12 kHz, the limit of the
 24 kHz audio). Bar heights are in dB, and the bars are spaced
-logarithmically in frequency like an audio analyser, starting from a low edge
+logarithmically in frequency like an audio analyzer, starting from a low edge
 of about a sixtieth of the span. The scale relabels itself to match. **Tap** it to show the tiles below instead; they return to the
 spectrum after 8 s unused, unless a tile is on the dial. A **sideways
 swipe** switches either way. Without a spectrum the tiles stay.
@@ -126,7 +126,7 @@ report `0x02` (see AetherSDR `docs/ctr2-usb-relay-design.md`,
 "Extensions"). A CTR2 never offers or receives it.
 
 Tiles: **AF** (audio level), **AGC** (threshold), **FILT** (width, 50 Hz per detent,
-about the passband centre), and **NR / NB / ANF** (level).
+about the passband center), and **NR / NB / ANF** (level).
 
 ## Connections (back of the board)
 

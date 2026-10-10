@@ -184,7 +184,7 @@ static void meter_scale(lv_obj_t *parent, bool top)
     };
     static lv_point_precise_t tick_pts[2][16][2];
     // A tick per S unit to S9 (long on odd units), then every 10 dB to +60
-    // (long on the labelled 20s).
+    // (long on the labeled 20s).
     for (int i = 1; i < 16; ++i) {
         float dbm = i <= 9 ? -127.0f + 6.0f * (float)i : -73.0f + 10.0f * (float)(i - 9);
         bool over = dbm > -73.0f;
@@ -230,14 +230,14 @@ static void slice_view(lv_obj_t *parent, slice_view_t *v, bool top)
     lv_obj_set_style_arc_rounded(v->peak, false, LV_PART_INDICATOR);
     meter_scale(parent, top);
 
-    // Offsets from the centre. The top block reads mode, frequency, filter
+    // Offsets from the center. The top block reads mode, frequency, filter
     // downwards; the bottom block mirrors it.
     v->freq = label(parent, top ? &lv_font_montserrat_40 : &lv_font_montserrat_28, COL_TEXT, "--.---.---");
     lv_obj_align(v->freq, LV_ALIGN_CENTER, 0, top ? -92 : 110);
     v->mode = label(parent, &lv_font_montserrat_20, COL_TEXT, "");
     lv_obj_align(v->mode, LV_ALIGN_CENTER, 0, top ? -134 : 142);
-    // TX badge: filled while transmitting, outlined on the TX slice, grey on
-    // the other; tapping the grey one moves TX to that slice.
+    // TX badge: filled while transmitting, outlined on the TX slice, gray on
+    // the other; tapping the gray one moves TX to that slice.
     v->tx = label(parent, &lv_font_montserrat_14, COL_DIM, "TX");
     lv_obj_set_style_border_width(v->tx, 1, 0);
     lv_obj_set_style_border_color(v->tx, COL_DIM, 0);
@@ -359,13 +359,13 @@ static void tiles(lv_obj_t *parent)
 
 // ---------------------------------------------------------------- spectrum
 
-// The centre dock shows either the audio spectrum from AetherSDR or the
+// The center dock shows either the audio spectrum from AetherSDR or the
 // tiles. A tap on the spectrum shows the tiles; they go back to the
 // spectrum after DOCK_TILES_MS unused (unless a tile is on the dial). A
 // sideways swipe switches either way. Without a spectrum the tiles stay.
 #define DOCK_W          212
 #define DOCK_H          96
-#define DOCK_Y          8       // centre offset of the dock
+#define DOCK_Y          8       // center offset of the dock
 #define DOCK_TILES_MS   8000
 #define SPECTRUM_STALE_MS 5000   // no frame for this long: fall back to the tiles
 #define SPECTRUM_SETTLE_MS 1500  // frames for this long before switching to it
@@ -377,8 +377,8 @@ static lv_obj_t *s_tiles_box, *s_spectrum;
 static dock_view_t s_dock = DOCK_TILES;
 static uint8_t s_bars[64], s_peaks[64];
 static int s_bar_count;
-static bool s_spectrum_tx;            // bars drawn in the TX colour (transmit audio)
-static int s_span_hz, s_low_hz;       // what the axis is labelled for
+static bool s_spectrum_tx;            // bars drawn in the TX color (transmit audio)
+static int s_span_hz, s_low_hz;       // what the axis is labeled for
 #define AXIS_LABELS 7
 static lv_obj_t *s_axis[AXIS_LABELS];
 static lv_obj_t *s_axis_unit;
@@ -452,7 +452,7 @@ static float axis_fraction(int low, int span, int hz)
     return span > 0 ? (float)hz / (float)span : 0.0f;
 }
 
-// Ticks on a 1-2-5 sequence (log axis) or a clean step (linear), each centred
+// Ticks on a 1-2-5 sequence (log axis) or a clean step (linear), each centered
 // where its frequency falls on the bars; "Hz" goes in the top-right corner.
 static void label_axis(int low, int span)
 {
@@ -656,7 +656,7 @@ static void meter_tick(slice_view_t *v, const knob_slice_t *s, int index, uint32
     meter_extremes_tick(&v->extremes, now, elapsed, v->bar.display, smeter_fraction);
 
     lv_arc_set_value(v->arc, (int32_t)lroundf(v->bar.display * 1000.0f));
-    // Peak marker: a sliver two degrees wide, centred on the window maximum.
+    // Peak marker: a sliver two degrees wide, centered on the window maximum.
     int32_t a = (int32_t)lroundf(meter_angle(v->top, v->extremes.max_pos));
     if (a != v->peak_angle) {
         v->peak_angle = a;
