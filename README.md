@@ -1,9 +1,7 @@
-# AetherKnob
+# SmartMTR-ESP32
 
-> **The dial's UI design is not for distribution.** The face, layout and
-> styling are closely based on SmartMTR by Dariusz Socha, so this repository
-> stays local until he has been asked. The rest of the code is ours. See
-> [NOTICE.md](NOTICE.md).
+> The dial's design is based on **[SmartMTR](https://smartmtr.net/) by
+> Dariusz Socha**, used with his permission. See [NOTICE.md](NOTICE.md).
 
 A FlexRadio controller on the **Elecrow CrowPanel 2.1" HMI ESP32 Rotary
 Display** (DHE03921D: ESP32-S3R8, 480×480 round IPS touch screen, rotary dial that also clicks).
@@ -191,3 +189,9 @@ Not yet verified on hardware:
 - Encoder counts per detent (`DIAL_COUNTS_PER_DETENT` in `board.c`).
 - Touch orientation.
 - Meters over the relay's UDP path. No CTR2 has exercised that path on hardware yet.
+
+## License
+
+GPL-3.0; see [LICENSE](LICENSE). The two `ctr2_link` files are MIT. The design
+credit to Dariusz Socha in [NOTICE.md](NOTICE.md) must be kept in any copy or
+derivative.

@@ -1,22 +1,21 @@
-# Not for distribution: the dial's UI design
+# Credits
 
-The **user-interface design** of this ESP32 dial is closely based on
-**SmartMTR** by **Dariusz Socha** (https://smartmtr.net/): the round face, its
-S-meter arcs, side gauges, centre dock and overall layout and styling. That is
-`main/ui.c`, the menu's visual styling in `main/menu.c`, and every render
-under `test/preview/`.
+## SmartMTR design
 
-That UI design must not be published, shared or distributed until Dariusz
-Socha has been asked about distribution and has agreed.
+The user-interface design of this dial is based on **SmartMTR** by
+**Dariusz Socha**: https://smartmtr.net/
 
-Everything else here is ours and not restricted by this notice:
+That covers the round face, its S-meter arcs, side gauges, centre dock, and
+overall layout and styling (`main/ui.c` and the menu's visual styling in
+`main/menu.c`). It is used with his permission, on the condition that he is
+credited and his website is linked. Keep this credit, and the one in the
+README, in any copy or derivative of this project.
 
-- the USB link and its extensions;
-- the SmartSDR API client and the menu's settings logic;
-- the meter ballistics, ported from AetherSDR's own code;
-- the board support;
-- the tests.
+## Licences
 
-Because the UI ships in this same repository, the repository as a whole stays
-local, and a pre-push hook in this clone refuses every push. To publish the
-rest, split the UI out first.
+- This project is licensed under the GNU General Public License v3.0; see
+  [LICENSE](LICENSE).
+- `main/ctr2_link.c` and `main/ctr2_link.h` are MIT-licensed, copied from
+  AetherSDR's CTR2 firmware reference (`tools/ctr2-firmware-reference`).
+- The meter ballistics (`main/meter_ballistics.c`) are ported from
+  AetherSDR's `SmartMtrWidget`.

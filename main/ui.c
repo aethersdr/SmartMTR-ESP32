@@ -1,3 +1,5 @@
+// The round face. Its design is based on SmartMTR by Dariusz Socha
+// (https://smartmtr.net/), used with his permission; see NOTICE.md.
 #include "ui.h"
 
 #include "board.h"
