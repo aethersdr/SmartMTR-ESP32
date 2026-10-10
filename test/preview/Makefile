@@ -22,6 +22,7 @@ faces: preview
 touchtest: preview
 	./preview /dev/null touchtest
 	./preview /dev/null geomtest
+	./preview /dev/null rowtest
 
 clean:
 	rm -f preview *.ppm *.png

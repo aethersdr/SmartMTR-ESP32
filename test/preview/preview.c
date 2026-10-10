@@ -343,6 +343,31 @@ int main(int argc, char **argv)
         m->revision++;
         run_for(100);
     }
+    if (strcmp(state, "rowtest") == 0) {
+        // Every setting row in the menu is the same height (headers excepted).
+        menu_open();
+        run_for(400);
+        int heights[64], n = 0;
+        lv_obj_t *list = NULL;
+        lv_obj_t *mute = find_in_row(lv_screen_active(), "Mute", &lv_switch_class);
+        if (mute)
+            list = lv_obj_get_parent(lv_obj_get_parent(mute));
+        for (uint32_t i = 0; list && i < lv_obj_get_child_count(list) && n < 64; ++i) {
+            lv_obj_t *row = lv_obj_get_child(list, (int32_t)i);
+            if (lv_obj_get_height(row) > 32)       // headers are 30 px
+                heights[n++] = lv_obj_get_height(row);
+        }
+        bool same = n > 10;
+        for (int i = 1; i < n; ++i)
+            same = same && heights[i] == heights[0];
+        printf("rowtest: %d setting rows, first %d px\n", n, n ? heights[0] : 0);
+        if (!same) {
+            fprintf(stderr, "rowtest FAILED: setting rows differ in height\n");
+            return 1;
+        }
+        printf("rowtest ok: every setting row is the same height\n");
+        return 0;
+    }
     if (strcmp(state, "geomtest") == 0) {
         // Every bar full: the last bar must reach the right end of the axis
         // area (DOCK_W - pad), where the scale's top frequency is drawn.

@@ -18,8 +18,10 @@
 #define COL_HEAD    lv_color_hex(0x37C8F5)
 #define COL_SELECT  lv_color_hex(0xFFD60A)
 
-#define ROW_SHORT       46     // on/off rows: name and switch
-#define ROW_TALL        74     // rows with a fader under the name
+// Every setting row is the same height, fader or not, so each one is an
+// equally easy target on the touchscreen. Rows without a fader centre their
+// name and switch in it.
+#define ROW_HEIGHT      74
 #define IDLE_CLOSE_MS   8000
 #define CHOICE_SEND_MS  700    // a previewed choice is sent once the dial rests this long
 
@@ -423,7 +425,7 @@ static void build_row(int i)
         return;
     }
     bool tall = has_fader(it);
-    lv_obj_set_height(r->row, tall ? ROW_TALL : ROW_SHORT);
+    lv_obj_set_height(r->row, ROW_HEIGHT);
     lv_obj_set_style_radius(r->row, 10, 0);
     lv_obj_set_style_bg_color(r->row, COL_ROW, 0);
     lv_obj_set_style_bg_opa(r->row, LV_OPA_COVER, 0);
