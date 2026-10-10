@@ -1,5 +1,9 @@
 # AetherKnob
 
+> **Not for distribution.** The face and meter design are closely based on
+> SmartMTR by Dariusz Socha. Keep this repository local until he has been
+> asked about distribution. See [NOTICE.md](NOTICE.md).
+
 A FlexRadio controller on the **Elecrow CrowPanel 2.1" HMI ESP32 Rotary
 Display** (DHE03921D: ESP32-S3R8, 480×480 round IPS touch screen, rotary dial that also clicks).
 The face is modelled on [SmartMTR](https://smartmtr.net/): S-meter arcs for two
