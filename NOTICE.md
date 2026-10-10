@@ -3,7 +3,7 @@
 ## SmartMTR design
 
 The user-interface design of this dial is based on **SmartMTR** by
-**Dariusz Socha**: https://smartmtr.net/
+**Dariusz Socha, SQ5X**: https://smartmtr.net/
 
 That covers the round face, its S-meter arcs, side gauges, centre dock, and
 overall layout and styling (`main/ui.c` and the menu's visual styling in

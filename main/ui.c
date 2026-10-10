@@ -1,4 +1,4 @@
-// The round face. Its design is based on SmartMTR by Dariusz Socha
+// The round face. Its design is based on SmartMTR by Dariusz Socha, SQ5X
 // (https://smartmtr.net/), used with his permission; see NOTICE.md.
 #include "ui.h"
 

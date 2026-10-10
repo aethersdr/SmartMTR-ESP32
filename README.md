@@ -1,11 +1,21 @@
 # SmartMTR-ESP32
 
-> The dial's design is based on **[SmartMTR](https://smartmtr.net/) by
-> Dariusz Socha**, used with his permission. See [NOTICE.md](NOTICE.md).
+<table><tr><td>
+
+### Based on SmartMTR by Dariusz Socha, SQ5X
+
+The design of this dial — the round face, the S-meter arcs, the side gauges,
+the centre dock, its layout and styling — comes from
+**[SmartMTR](https://smartmtr.net/)**, created by **Dariusz Socha (SQ5X)**.
+
+This port is published with his kind permission. All credit for the SmartMTR
+design is his: **https://smartmtr.net/**
+
+</td></tr></table>
 
 A FlexRadio controller on the **Elecrow CrowPanel 2.1" HMI ESP32 Rotary
 Display** (DHE03921D: ESP32-S3R8, 480×480 round IPS touch screen, rotary dial that also clicks).
-The face is modelled on [SmartMTR](https://smartmtr.net/): S-meter arcs for two
+The face is modelled on [SmartMTR](https://smartmtr.net/) by Dariusz Socha, SQ5X: S-meter arcs for two
 slices, SWR/COMP/PWR/MIC needles, and the frequency readout, with a dock of touch
 tiles in the middle.
 
@@ -193,5 +203,5 @@ Not yet verified on hardware:
 ## License
 
 GPL-3.0; see [LICENSE](LICENSE). The two `ctr2_link` files are MIT. The design
-credit to Dariusz Socha in [NOTICE.md](NOTICE.md) must be kept in any copy or
+credit to Dariusz Socha, SQ5X, in [NOTICE.md](NOTICE.md) must be kept in any copy or
 derivative.
