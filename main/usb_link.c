@@ -391,6 +391,7 @@ void usb_link_start(void)
     s_tx = xQueueCreate(TX_QUEUE_REPORTS, sizeof(report_t));
     s_actions = xQueueCreate(ACTION_QUEUE_DEPTH, sizeof(knob_action_t));
     flex_api_init(send_tcp, send_udp);
+    ctr2_rx_init(&s_link_rx);   // plain version 0 until AetherSDR accepts extensions
     begin_waiting();
     xTaskCreatePinnedToCore(radio_task, "radio", 6144, NULL, 5, &s_radio_task, 1);
 
