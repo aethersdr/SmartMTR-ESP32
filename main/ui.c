@@ -29,7 +29,7 @@
 #define COL_TILE_ON   lv_color_hex(0x1C6E99)
 #define COL_SELECT    lv_color_hex(0xFFD60A)
 
-// S-meter geometry: S0..S9 fill half the arc, S9..S9+40 the rest.
+// S-meter geometry: S0..S9+40 along the arc, linear in dBm.
 #define ARC_RADIUS    222
 #define ARC_WIDTH     20
 #define ARC_SPAN      116          // degrees
@@ -92,21 +92,17 @@ static uint32_t s_last_frame_ms;     // for the meter ballistics' elapsed time
 
 // ---------------------------------------------------------------- geometry
 
-// Fraction 0..1 along the S-meter for a level in dBm.
-// Fraction 0..1 along the S-meter for a level in dBm, as AetherSDR's SmartMTR
-// maps it (SmartMtrConfig mapSignal): S0..S9 fill the lower half and S9..S9+40
-// the upper half, each linear in dBm, so S9 sits at the midpoint. The dial tops
-// out at +40, not SmartMTR's +60, so the over-S9 half has more room per dB.
+// Fraction 0..1 along the S-meter for a level in dBm: linear from S0
+// (-127 dBm) to S9+40 (-33 dBm), so every dB is the same length and S9 sits
+// at 54/94 of the arc.
 static float smeter_fraction(float dbm)
 {
-    const float s0 = -127.0f, s9 = -73.0f, top = -33.0f;  // S9+40
+    const float s0 = -127.0f, top = -33.0f;  // S0, S9+40
     if (dbm <= s0)
         return 0.0f;
-    if (dbm <= s9)
-        return 0.5f * (dbm - s0) / (s9 - s0);
     if (dbm >= top)
         return 1.0f;
-    return 0.5f + 0.5f * (dbm - s9) / (top - s9);
+    return (dbm - s0) / (top - s0);
 }
 
 static void polar(int cx, int cy, float r, float deg, int32_t *x, int32_t *y)

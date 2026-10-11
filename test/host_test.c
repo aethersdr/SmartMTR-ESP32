@@ -197,13 +197,12 @@ static void test_menu(void)
     assert(!strstr(sent, "slice set 0 tx=1"));
 }
 
-// The dial's S-meter mapping: S0..S9 lower half, S9..+40 upper.
+// The dial's S-meter mapping: linear in dBm from S0 to S9+40.
 static float frac(float dbm)
 {
     if (dbm <= -127.0f) return 0.0f;
-    if (dbm <= -73.0f) return 0.5f * (dbm + 127.0f) / 54.0f;
     if (dbm >= -33.0f) return 1.0f;
-    return 0.5f + 0.5f * (dbm + 73.0f) / 40.0f;
+    return (dbm + 127.0f) / 94.0f;
 }
 
 // The port matches AetherSDR's SmartMtrWidget: MeterSmoother time constants,
@@ -226,6 +225,7 @@ static void test_meter_ballistics(void)
     meter_extremes_reset(&e);
     uint32_t t = 0;
     float level = -73.0f;
+    const float s9 = frac(-73.0f);
     for (; t <= 5500; t += 33) {
         if (t >= 1000)
             level = -127.0f;
@@ -235,15 +235,15 @@ static void test_meter_ballistics(void)
         meter_extremes_tick(&e, t, 33, b.display, frac);
         assert(e.max_pos >= b.display - 1e-6f);         // never below the bar
         if (t == 990)
-            assert(fabsf(e.max_pos - 0.5f) < 1e-3f);    // the bar pushed it straight up to S9
+            assert(fabsf(e.max_pos - s9) < 1e-3f);      // the bar pushed it straight up to S9
         if (t >= 1500 && t <= 3960)
-            assert(fabsf(e.max_pos - 0.5f) < 1e-3f);    // held: S9 still in the 3 s window
+            assert(fabsf(e.max_pos - s9) < 1e-3f);      // held: S9 still in the 3 s window
         if (t >= 1500 && t <= 3960)
             assert(b.display < 0.2f);                   // while the bar has sagged
     }
     // Last S9 sample at t = 990, window expired after t = 3990; ~1.5 s of
     // glide at 60/220 per second has taken it down by about 0.41.
-    assert(e.max_pos < 0.5f - 0.35f && e.max_pos > 0.0f);
+    assert(e.max_pos < s9 - 0.35f && e.max_pos > 0.0f);
 }
 
 static void put16(uint8_t *p, uint16_t v) { p[0] = v >> 8; p[1] = v & 0xFF; }
