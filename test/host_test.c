@@ -197,13 +197,13 @@ static void test_menu(void)
     assert(!strstr(sent, "slice set 0 tx=1"));
 }
 
-// S-meter mapping AetherSDR's SmartMTR uses: S0..S9 lower half, S9..+60 upper.
+// The dial's S-meter mapping: S0..S9 lower half, S9..+40 upper.
 static float frac(float dbm)
 {
     if (dbm <= -127.0f) return 0.0f;
     if (dbm <= -73.0f) return 0.5f * (dbm + 127.0f) / 54.0f;
-    if (dbm >= -13.0f) return 1.0f;
-    return 0.5f + 0.5f * (dbm + 73.0f) / 60.0f;
+    if (dbm >= -33.0f) return 1.0f;
+    return 0.5f + 0.5f * (dbm + 73.0f) / 40.0f;
 }
 
 // The port matches AetherSDR's SmartMtrWidget: MeterSmoother time constants,

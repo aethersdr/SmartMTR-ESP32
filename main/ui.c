@@ -29,7 +29,7 @@
 #define COL_TILE_ON   lv_color_hex(0x1C6E99)
 #define COL_SELECT    lv_color_hex(0xFFD60A)
 
-// S-meter geometry: S0..S9 fill 60% of the arc, S9..S9+60 the rest.
+// S-meter geometry: S0..S9 fill half the arc, S9..S9+40 the rest.
 #define ARC_RADIUS    222
 #define ARC_WIDTH     20
 #define ARC_SPAN      116          // degrees
@@ -94,11 +94,12 @@ static uint32_t s_last_frame_ms;     // for the meter ballistics' elapsed time
 
 // Fraction 0..1 along the S-meter for a level in dBm.
 // Fraction 0..1 along the S-meter for a level in dBm, as AetherSDR's SmartMTR
-// maps it (SmartMtrConfig mapSignal): S0..S9 fill the lower half and S9..S9+60
-// the upper half, each linear in dBm, so S9 sits at the midpoint.
+// maps it (SmartMtrConfig mapSignal): S0..S9 fill the lower half and S9..S9+40
+// the upper half, each linear in dBm, so S9 sits at the midpoint. The dial tops
+// out at +40, not SmartMTR's +60, so the over-S9 half has more room per dB.
 static float smeter_fraction(float dbm)
 {
-    const float s0 = -127.0f, s9 = -73.0f, top = -13.0f;  // S9+60
+    const float s0 = -127.0f, s9 = -73.0f, top = -33.0f;  // S9+40
     if (dbm <= s0)
         return 0.0f;
     if (dbm <= s9)
@@ -175,17 +176,17 @@ static lv_obj_t *meter_arc(lv_obj_t *parent, bool top, int width, bool show_trac
     return arc;
 }
 
-// Ticks and labels: S1..S9 odd units, then +20/+40/+60, like SmartMTR.
+// Ticks and labels: S1..S9 odd units, then +20/+40.
 static void meter_scale(lv_obj_t *parent, bool top)
 {
     static const struct { float dbm; const char *text; } marks[] = {
         {-121, "1"}, {-109, "3"}, {-97, "5"}, {-85, "7"}, {-73, "9"},
-        {-53, "+20"}, {-33, "+40"}, {-13, "+60"},
+        {-53, "+20"}, {-33, "+40"},
     };
     static lv_point_precise_t tick_pts[2][16][2];
-    // A tick per S unit to S9 (long on odd units), then every 10 dB to +60
+    // A tick per S unit to S9 (long on odd units), then every 10 dB to +40
     // (long on the labeled 20s).
-    for (int i = 1; i < 16; ++i) {
+    for (int i = 1; i < 14; ++i) {
         float dbm = i <= 9 ? -127.0f + 6.0f * (float)i : -73.0f + 10.0f * (float)(i - 9);
         bool over = dbm > -73.0f;
         bool major = over ? (i - 9) % 2 == 0 : i % 2 == 1;

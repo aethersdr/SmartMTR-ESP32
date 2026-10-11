@@ -105,7 +105,7 @@ The bars and their white peak markers use AetherSDR's SmartMTR ballistics
   leaves the window, the marker glides down at a steady rate, and it never
   sits below the bar.
 - **Scale:** as in SmartMTR, S9 sits at the midpoint, with S0 to S9 on one
-  side and S9 to +60 on the other.
+  side and S9 to +40 on the other.
 
 ### Center: spectrum or tiles
 
