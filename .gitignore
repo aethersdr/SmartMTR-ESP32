@@ -7,3 +7,4 @@ host_test
 test/preview/preview
 test/preview/*.ppm
 test/preview/*.png
+CLAUDE.md
