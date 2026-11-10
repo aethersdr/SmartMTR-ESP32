@@ -7,6 +7,7 @@
 #include "menu_items.h"
 #include "meter_ballistics.h"
 #include "model.h"
+#include "ui_metrics.h"
 #include "usb_link.h"
 
 #include <math.h>
@@ -14,8 +15,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#define CX 240
-#define CY 240
+#define CX UI_HALF
+#define CY UI_HALF
 
 // SmartMTR palette.
 #define COL_FACE      lv_color_hex(0x07131D)
@@ -30,8 +31,8 @@
 #define COL_SELECT    lv_color_hex(0xFFD60A)
 
 // S-meter geometry: S0..S9+40 along the arc, linear in dBm.
-#define ARC_RADIUS    222
-#define ARC_WIDTH     20
+#define ARC_RADIUS    PX(222)
+#define ARC_WIDTH     PX(20)
 #define ARC_SPAN      116          // degrees
 #define TOP_START     (270 - ARC_SPAN / 2)
 #define BOTTOM_START  (90 + ARC_SPAN / 2)   // runs anticlockwise, S1 on the left
@@ -84,6 +85,12 @@ static uint32_t s_seen_revision = UINT32_MAX;
 
 static bool s_btn_was_down;
 static bool s_hold_fired;
+#if !BOARD_HAS_DIAL_CLICK
+// A dial that does not click: a tap on the face, away from its controls,
+// is the click, and touch-and-hold is the click-and-hold.
+#define TAP_RADIUS PX(160)   // taps further from the center are ignored
+static bool s_tap_click, s_tap_hold;
+#endif
 static uint32_t s_dial_down_ms;
 static bool s_locked_drawn;
 static knob_model_t s_snap;
@@ -188,22 +195,22 @@ static void meter_scale(lv_obj_t *parent, bool top)
         bool major = over ? (i - 9) % 2 == 0 : i % 2 == 1;
         float a = meter_angle(top, smeter_fraction(dbm));
         int32_t x0, y0, x1, y1;
-        polar(CX, CY, ARC_RADIUS - ARC_WIDTH - 6, a, &x0, &y0);
-        polar(CX, CY, ARC_RADIUS - ARC_WIDTH - (major ? 20 : 12), a, &x1, &y1);
+        polar(CX, CY, ARC_RADIUS - ARC_WIDTH - PX(6), a, &x0, &y0);
+        polar(CX, CY, ARC_RADIUS - ARC_WIDTH - PX(major ? 20 : 12), a, &x1, &y1);
         lv_point_precise_t *p = tick_pts[top ? 0 : 1][i];
         p[0] = (lv_point_precise_t){x0, y0};
         p[1] = (lv_point_precise_t){x1, y1};
         lv_obj_t *t = lv_line_create(parent);
         lv_line_set_points(t, p, 2);
-        lv_obj_set_style_line_width(t, 3, 0);
+        lv_obj_set_style_line_width(t, PX(3), 0);
         lv_obj_set_style_line_color(t, over ? COL_OVER : COL_SCALE, 0);
     }
     for (size_t i = 0; i < sizeof marks / sizeof marks[0]; ++i) {
         float a = meter_angle(top, smeter_fraction(marks[i].dbm));
         int32_t x, y;
-        polar(CX, CY, ARC_RADIUS - ARC_WIDTH - 36, a, &x, &y);
+        polar(CX, CY, ARC_RADIUS - ARC_WIDTH - PX(36), a, &x, &y);
         bool nine = strcmp(marks[i].text, "9") == 0;
-        lv_obj_t *l = label(parent, nine ? &lv_font_montserrat_28 : &lv_font_montserrat_20,
+        lv_obj_t *l = label(parent, nine ? UI_FONT_28 : UI_FONT_20,
                             marks[i].dbm > -73.0f ? COL_OVER : COL_SCALE, marks[i].text);
         lv_obj_align(l, LV_ALIGN_CENTER, x - CX, y - CY);
     }
@@ -223,23 +230,23 @@ static void slice_view(lv_obj_t *parent, slice_view_t *v, bool top)
     v->top = top;
     v->arc = meter_arc(parent, top, ARC_WIDTH, true, COL_LEVEL);
     // Peak-hold: a thin white sliver drawn by a second, track-less arc.
-    v->peak = meter_arc(parent, top, ARC_WIDTH + 6, false, lv_color_white());
+    v->peak = meter_arc(parent, top, ARC_WIDTH + PX(6), false, lv_color_white());
     lv_obj_set_style_arc_rounded(v->peak, false, LV_PART_INDICATOR);
     meter_scale(parent, top);
 
     // Offsets from the center. The top block reads mode, frequency, filter
     // downwards; the bottom block mirrors it.
-    v->freq = label(parent, top ? &lv_font_montserrat_40 : &lv_font_montserrat_28, COL_TEXT, "--.---.---");
-    lv_obj_align(v->freq, LV_ALIGN_CENTER, 0, top ? -92 : 110);
-    v->mode = label(parent, &lv_font_montserrat_20, COL_TEXT, "");
-    lv_obj_align(v->mode, LV_ALIGN_CENTER, 0, top ? -134 : 142);
+    v->freq = label(parent, top ? UI_FONT_40 : UI_FONT_28, COL_TEXT, "--.---.---");
+    lv_obj_align(v->freq, LV_ALIGN_CENTER, 0, PX(top ? -92 : 110));
+    v->mode = label(parent, UI_FONT_20, COL_TEXT, "");
+    lv_obj_align(v->mode, LV_ALIGN_CENTER, 0, PX(top ? -134 : 142));
     // TX badge: filled while transmitting, outlined on the TX slice, gray on
     // the other; tapping the gray one moves TX to that slice.
-    v->tx = label(parent, &lv_font_montserrat_14, COL_DIM, "TX");
+    v->tx = label(parent, UI_FONT_14, COL_DIM, "TX");
     lv_obj_set_style_border_width(v->tx, 1, 0);
     lv_obj_set_style_border_color(v->tx, COL_DIM, 0);
     lv_obj_set_style_bg_color(v->tx, COL_LEVEL, 0);
-    lv_obj_set_style_pad_hor(v->tx, 4, 0);
+    lv_obj_set_style_pad_hor(v->tx, PX(4), 0);
     lv_obj_set_clickable(v->tx, true);
     lv_obj_set_ext_click_area(v->tx, 14);
     lv_obj_add_event_cb(v->tx, tx_badge_event, LV_EVENT_SHORT_CLICKED, v);
@@ -248,8 +255,8 @@ static void slice_view(lv_obj_t *parent, slice_view_t *v, bool top)
     v->meter_slice = -2;    // forces a fresh start on the first frame
     v->tx_state = -1;
     v->peak_angle = INT32_MIN;
-    v->filter = label(parent, &lv_font_montserrat_20, COL_DIM, "");
-    lv_obj_align(v->filter, LV_ALIGN_CENTER, 0, top ? -54 : 82);
+    v->filter = label(parent, UI_FONT_20, COL_DIM, "");
+    lv_obj_align(v->filter, LV_ALIGN_CENTER, 0, PX(top ? -54 : 82));
 }
 
 static void gauge(lv_obj_t *parent, gauge_t *g, int cx, int cy, float lo, float hi,
@@ -257,30 +264,30 @@ static void gauge(lv_obj_t *parent, gauge_t *g, int cx, int cy, float lo, float 
 {
     g->cx = cx;
     g->cy = cy;
-    g->len = 22;
+    g->len = PX(22);
     g->lo = lo;
     g->hi = hi;
     lv_obj_t *dial = lv_obj_create(parent);
     lv_obj_remove_style_all(dial);
-    lv_obj_set_size(dial, 58, 58);
+    lv_obj_set_size(dial, PX(58), PX(58));
     lv_obj_set_style_radius(dial, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(dial, COL_TRACK, 0);
     lv_obj_set_style_bg_opa(dial, LV_OPA_COVER, 0);
-    lv_obj_align(dial, LV_ALIGN_TOP_LEFT, cx - 29, cy - 29);
+    lv_obj_align(dial, LV_ALIGN_TOP_LEFT, cx - PX(29), cy - PX(29));
     lv_obj_set_clickable(dial, false);
 
     g->needle = lv_line_create(parent);
-    lv_obj_set_style_line_width(g->needle, 3, 0);
+    lv_obj_set_style_line_width(g->needle, PX(3), 0);
     lv_obj_set_style_line_color(g->needle, COL_LEVEL, 0);
     lv_obj_set_style_line_rounded(g->needle, true, 0);
 
     // The name sits inside the dial, below the hub where the needle never goes.
-    lv_obj_t *n = label(parent, &lv_font_montserrat_14, COL_TEXT, name);
-    lv_obj_align(n, LV_ALIGN_CENTER, cx - CX, cy - CY + 17);
-    lv_obj_t *l = label(parent, &lv_font_montserrat_14, COL_DIM, lo_text);
-    lv_obj_align(l, LV_ALIGN_TOP_LEFT, cx - 44, cy + 6);
-    lv_obj_t *h = label(parent, &lv_font_montserrat_14, COL_DIM, hi_text);
-    lv_obj_align(h, LV_ALIGN_TOP_LEFT, cx + 32, cy + 6);
+    lv_obj_t *n = label(parent, UI_FONT_14, COL_TEXT, name);
+    lv_obj_align(n, LV_ALIGN_CENTER, cx - CX, cy - CY + PX(17));
+    lv_obj_t *l = label(parent, UI_FONT_14, COL_DIM, lo_text);
+    lv_obj_align(l, LV_ALIGN_TOP_LEFT, cx - PX(44), cy + PX(6));
+    lv_obj_t *h = label(parent, UI_FONT_14, COL_DIM, hi_text);
+    lv_obj_align(h, LV_ALIGN_TOP_LEFT, cx + PX(32), cy + PX(6));
 }
 
 // Needle sweeps 135..405 degrees (SW to SE through the top).
@@ -340,15 +347,15 @@ static void tiles(lv_obj_t *parent)
         t->param = defs[i].p;
         t->toggle = defs[i].toggle;
         t->btn = lv_button_create(parent);
-        lv_obj_set_size(t->btn, 66, 46);
-        lv_obj_align(t->btn, LV_ALIGN_CENTER, (i % 3 - 1) * 72, i < 3 ? -24 : 24);
+        lv_obj_set_size(t->btn, PX(66), PX(46));
+        lv_obj_align(t->btn, LV_ALIGN_CENTER, PX((i % 3 - 1) * 72), PX(i < 3 ? -24 : 24));
         lv_obj_set_style_bg_color(t->btn, COL_TILE, 0);
-        lv_obj_set_style_radius(t->btn, 10, 0);
+        lv_obj_set_style_radius(t->btn, PX(10), 0);
         lv_obj_set_style_shadow_width(t->btn, 0, 0);
         lv_obj_set_style_border_color(t->btn, COL_SELECT, 0);
         lv_obj_set_style_border_width(t->btn, 0, 0);
         lv_obj_add_event_cb(t->btn, tile_event, LV_EVENT_ALL, t);
-        t->label = label(t->btn, &lv_font_montserrat_14, COL_TEXT, t->name);
+        t->label = label(t->btn, UI_FONT_14, COL_TEXT, t->name);
         lv_obj_set_style_text_align(t->label, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_center(t->label);
     }
@@ -360,9 +367,9 @@ static void tiles(lv_obj_t *parent)
 // tiles. A tap on the spectrum shows the tiles; they go back to the
 // spectrum after DOCK_TILES_MS unused (unless a tile is on the dial). A
 // sideways swipe switches either way. Without a spectrum the tiles stay.
-#define DOCK_W          212
-#define DOCK_H          96
-#define DOCK_Y          8       // center offset of the dock
+#define DOCK_W          PX(212)
+#define DOCK_H          PX(96)
+#define DOCK_Y          PX(8)      // center offset of the dock
 #define DOCK_TILES_MS   8000
 #define SPECTRUM_STALE_MS 5000   // no frame for this long: fall back to the tiles
 #define SPECTRUM_SETTLE_MS 1500  // frames for this long before switching to it
@@ -414,7 +421,7 @@ static void spectrum_draw(lv_event_t *e)
     // pixels from a.x1 + pad, so bar i sits over the frequencies its ticks
     // name. (LVGL areas are inclusive, and an integer slot width would shrink
     // the bars into the left of the axis.)
-    const int pad = 10, axis = 18;
+    const int pad = PX(10), axis = PX(18);
     const int x0 = a.x1 + pad, w = DOCK_W - 2 * pad;
     const int y_top = a.y1 + pad, y_base = a.y2 - axis;
     const int h = y_base - y_top;
@@ -453,13 +460,13 @@ static float axis_fraction(int low, int span, int hz)
 // where its frequency falls on the bars; "Hz" goes in the top-right corner.
 static void label_axis(int low, int span)
 {
-    const int pad = 10, w = DOCK_W - 2 * pad;
+    const int pad = PX(10), w = DOCK_W - 2 * pad;
     int ticks[AXIS_LABELS], count = 0;
     if (low > 0) {
         // Decades first (10, 100, 1k, 10k), then 2s and 5s wherever they keep
         // MIN_TICK_GAP clear of every tick already placed: the low end of a
         // log axis is crowded.
-        enum { MIN_TICK_GAP = 30 };
+        const float MIN_TICK_GAP = (float)PX(30);
         static const int decades[] = {10, 100, 1000, 10000};
         static const int fills[] = {20, 50, 200, 500, 2000, 5000, 20000};
         const int *passes[2] = {decades, fills};
@@ -503,11 +510,11 @@ static void label_axis(int low, int span)
         else
             snprintf(t, sizeof t, "%d", hz);
         ui_set_text(l, t);
-        int x = pad + (int)(axis_fraction(low, span, hz) * (float)w) - 20;
+        int x = pad + (int)(axis_fraction(low, span, hz) * (float)w) - PX(20);
         if (x < 0)
             x = 0;
-        if (x > DOCK_W - 40)
-            x = DOCK_W - 40;
+        if (x > DOCK_W - PX(40))
+            x = DOCK_W - PX(40);
         lv_obj_align(l, LV_ALIGN_BOTTOM_LEFT, x, -1);
         lv_obj_set_hidden(l, false);
     }
@@ -526,7 +533,7 @@ static void spectrum_panel(lv_obj_t *parent)
     lv_obj_remove_style_all(s_spectrum);
     lv_obj_set_size(s_spectrum, DOCK_W, DOCK_H);
     lv_obj_align(s_spectrum, LV_ALIGN_CENTER, 0, DOCK_Y);
-    lv_obj_set_style_radius(s_spectrum, 12, 0);
+    lv_obj_set_style_radius(s_spectrum, PX(12), 0);
     lv_obj_set_style_bg_color(s_spectrum, COL_TRACK, 0);
     lv_obj_set_style_bg_opa(s_spectrum, LV_OPA_COVER, 0);
     lv_obj_set_scrollable(s_spectrum, false);
@@ -534,13 +541,13 @@ static void spectrum_panel(lv_obj_t *parent)
     lv_obj_add_event_cb(s_spectrum, spectrum_event, LV_EVENT_SHORT_CLICKED, NULL);
     // Frequency scale along the bottom; relabelled when the span changes.
     for (int i = 0; i < AXIS_LABELS; ++i) {
-        s_axis[i] = label(s_spectrum, &lv_font_montserrat_14, COL_TEXT, "");
-        lv_obj_set_width(s_axis[i], 40);
+        s_axis[i] = label(s_spectrum, UI_FONT_14, COL_TEXT, "");
+        lv_obj_set_width(s_axis[i], PX(40));
         lv_obj_set_style_text_align(s_axis[i], LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_hidden(s_axis[i], true);
     }
-    s_axis_unit = label(s_spectrum, &lv_font_montserrat_14, COL_TEXT, "");
-    lv_obj_align(s_axis_unit, LV_ALIGN_TOP_RIGHT, -8, 4);
+    s_axis_unit = label(s_spectrum, UI_FONT_14, COL_TEXT, "");
+    lv_obj_align(s_axis_unit, LV_ALIGN_TOP_RIGHT, -PX(8), PX(4));
     lv_obj_set_hidden(s_spectrum, true);
 }
 
@@ -629,7 +636,7 @@ static void show_slice(slice_view_t *v, const knob_slice_t *s, int index, bool t
     ui_set_textf(v->mode, "%c  %s", s->letter, s->mode);
     ui_set_textf(v->filter, "%d-%d  %s", s->filter_lo, s->filter_hi, s->rxant);
     show_tx_badge(v, !s->tx ? TX_OTHER : transmitting ? TX_ON_AIR : TX_SLICE);
-    lv_obj_align_to(v->tx, v->mode, LV_ALIGN_OUT_LEFT_MID, -10, 0);
+    lv_obj_align_to(v->tx, v->mode, LV_ALIGN_OUT_LEFT_MID, -PX(10), 0);
 }
 
 // Every frame: the S-meter bar and its peak marker, with AetherSDR's
@@ -705,7 +712,7 @@ static void show_tiles(const knob_slice_t *s)
         bool selected = s_mode == MODE_PARAM && s_param == t->param;
         if (selected != t->selected) {
             t->selected = selected;
-            lv_obj_set_style_border_width(t->btn, selected ? 3 : 0, 0);
+            lv_obj_set_style_border_width(t->btn, selected ? PX(3) : 0, 0);
         }
     }
 }
@@ -750,6 +757,11 @@ static void handle_dial(const knob_model_t *m)
     }
     bool clicked = !down && s_btn_was_down && !s_hold_fired;
     s_btn_was_down = down;
+#if !BOARD_HAS_DIAL_CLICK
+    clicked = clicked || s_tap_click;
+    held = held || s_tap_hold;
+    s_tap_click = s_tap_hold = false;
+#endif
 
     if (menu_is_open()) {
         if (detents)
@@ -859,6 +871,24 @@ static void screen_gesture(lv_event_t *e)
     }
 }
 
+#if !BOARD_HAS_DIAL_CLICK
+// Taps that reach the face itself, i.e. not on a tile, the spectrum or a TX
+// badge. A swipe never arrives here as a click: screen_gesture() waits for
+// the release.
+static void face_tap(lv_event_t *e)
+{
+    lv_point_t p;
+    lv_indev_get_point(lv_indev_active(), &p);
+    const int32_t dx = p.x - CX, dy = p.y - CY;
+    if (dx * dx + dy * dy > TAP_RADIUS * TAP_RADIUS)
+        return;
+    if (lv_event_get_code(e) == LV_EVENT_SHORT_CLICKED)
+        s_tap_click = true;
+    else
+        s_tap_hold = true;
+}
+#endif
+
 void ui_start(lv_display_t *disp)
 {
     lv_obj_t *scr = lv_display_get_screen_active(disp);
@@ -867,7 +897,7 @@ void ui_start(lv_display_t *disp)
 
     lv_obj_t *face = lv_obj_create(scr);
     lv_obj_remove_style_all(face);
-    lv_obj_set_size(face, 480, 480);
+    lv_obj_set_size(face, UI_SIZE, UI_SIZE);
     lv_obj_set_style_radius(face, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(face, COL_FACE, 0);
     lv_obj_set_style_bg_opa(face, LV_OPA_COVER, 0);
@@ -876,34 +906,39 @@ void ui_start(lv_display_t *disp)
 
     slice_view(face, &s_top, true);
     slice_view(face, &s_bottom, false);
-    gauge(face, &s_swr, 84, 208, 1.0f, 3.0f, "SWR", "1", "3");
-    gauge(face, &s_comp, 84, 280, 0.0f, 25.0f, "COMP", "0", "25");
-    gauge(face, &s_pwr, 396, 208, 0.0f, 100.0f, "PWR", "0", "100");
-    gauge(face, &s_mic, 396, 280, -40.0f, 0.0f, "MIC", "-40", "0");
+    gauge(face, &s_swr, PX(84), PX(208), 1.0f, 3.0f, "SWR", "1", "3");
+    gauge(face, &s_comp, PX(84), PX(280), 0.0f, 25.0f, "COMP", "0", "25");
+    gauge(face, &s_pwr, PX(396), PX(208), 0.0f, 100.0f, "PWR", "0", "100");
+    gauge(face, &s_mic, PX(396), PX(280), -40.0f, 0.0f, "MIC", "-40", "0");
     s_tiles_box = lv_obj_create(face);
     lv_obj_remove_style_all(s_tiles_box);
-    lv_obj_set_size(s_tiles_box, DOCK_W + 4, DOCK_H);
+    lv_obj_set_size(s_tiles_box, DOCK_W + PX(4), DOCK_H);
     lv_obj_align(s_tiles_box, LV_ALIGN_CENTER, 0, DOCK_Y);
     lv_obj_set_scrollable(s_tiles_box, false);
     tiles(s_tiles_box);
     spectrum_panel(face);
+#if !BOARD_HAS_DIAL_CLICK
+    lv_obj_remove_flag(s_tiles_box, LV_OBJ_FLAG_CLICKABLE);   // taps between tiles reach the face
+    lv_obj_add_event_cb(face, face_tap, LV_EVENT_SHORT_CLICKED, NULL);
+    lv_obj_add_event_cb(face, face_tap, LV_EVENT_LONG_PRESSED, NULL);
+#endif
 
-    s_step_label = label(face, &lv_font_montserrat_14, COL_DIM, "");
-    lv_obj_align(s_step_label, LV_ALIGN_CENTER, 0, 64);
-    s_station_label = label(face, &lv_font_montserrat_20, COL_DIM, "");
-    lv_obj_align(s_station_label, LV_ALIGN_CENTER, 0, 110);
+    s_step_label = label(face, UI_FONT_14, COL_DIM, "");
+    lv_obj_align(s_step_label, LV_ALIGN_CENTER, 0, PX(64));
+    s_station_label = label(face, UI_FONT_20, COL_DIM, "");
+    lv_obj_align(s_station_label, LV_ALIGN_CENTER, 0, PX(110));
 
     menu_create(scr);
     lv_obj_add_event_cb(scr, screen_gesture, LV_EVENT_GESTURE, NULL);
 
     s_status_panel = lv_obj_create(scr);
     lv_obj_remove_style_all(s_status_panel);
-    lv_obj_set_size(s_status_panel, 480, 480);
+    lv_obj_set_size(s_status_panel, UI_SIZE, UI_SIZE);
     lv_obj_set_style_radius(s_status_panel, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(s_status_panel, COL_FACE, 0);
     lv_obj_set_style_bg_opa(s_status_panel, LV_OPA_90, 0);
     lv_obj_center(s_status_panel);
-    s_status_label = label(s_status_panel, &lv_font_montserrat_20, COL_TEXT, "");
+    s_status_label = label(s_status_panel, UI_FONT_20, COL_TEXT, "");
     lv_obj_set_style_text_align(s_status_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(s_status_label);
 

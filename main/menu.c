@@ -3,6 +3,7 @@
 #include "flex_api.h"
 #include "menu_items.h"
 #include "ui.h"
+#include "ui_metrics.h"
 #include "usb_link.h"
 
 #include <stdio.h>
@@ -21,7 +22,7 @@
 // Every setting row is the same height, fader or not, so each one is an
 // equally easy target on the touchscreen. Rows without a fader center their
 // name and switch in it.
-#define ROW_HEIGHT      74
+#define ROW_HEIGHT      PX(74)
 #define IDLE_CLOSE_MS   8000
 #define CHOICE_SEND_MS  700    // a previewed choice is sent once the dial rests this long
 
@@ -178,7 +179,7 @@ static void draw_row(int i)
     int frame = i == s_selected ? FRAME_EDIT : i == s_highlight ? FRAME_HIGHLIGHT : FRAME_NONE;
     if (frame != r->frame) {
         r->frame = frame;
-        lv_obj_set_style_border_width(r->row, frame == FRAME_EDIT ? 3 : frame ? 2 : 0, 0);
+        lv_obj_set_style_border_width(r->row, frame == FRAME_EDIT ? PX(3) : frame ? PX(2) : 0, 0);
         lv_obj_set_style_border_color(r->row, frame == FRAME_EDIT ? COL_SELECT : COL_TEXT, 0);
     }
 }
@@ -414,11 +415,11 @@ static void build_row(int i)
     lv_obj_remove_style_all(r->row);
     lv_obj_set_width(r->row, lv_pct(100));
     lv_obj_set_scrollable(r->row, false);
-    r->name = text(r->row, &lv_font_montserrat_20, COL_TEXT);
+    r->name = text(r->row, UI_FONT_20, COL_TEXT);
     lv_label_set_text(r->name, it->label);
     if (it->kind == ITEM_HEADER) {
-        lv_obj_set_height(r->row, 30);
-        lv_obj_set_style_text_font(r->name, &lv_font_montserrat_14, 0);
+        lv_obj_set_height(r->row, PX(30));
+        lv_obj_set_style_text_font(r->name, UI_FONT_14, 0);
         lv_obj_set_style_text_color(r->name, COL_HEAD, 0);
         lv_obj_align(r->name, LV_ALIGN_BOTTOM_MID, 0, 0);
         lv_obj_set_clickable(r->row, false);
@@ -426,48 +427,48 @@ static void build_row(int i)
     }
     bool tall = has_fader(it);
     lv_obj_set_height(r->row, ROW_HEIGHT);
-    lv_obj_set_style_radius(r->row, 10, 0);
+    lv_obj_set_style_radius(r->row, PX(10), 0);
     lv_obj_set_style_bg_color(r->row, COL_ROW, 0);
     lv_obj_set_style_bg_opa(r->row, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(r->row, 0, 0);
-    lv_obj_set_style_pad_hor(r->row, 14, 0);
+    lv_obj_set_style_pad_hor(r->row, PX(14), 0);
     lv_obj_add_event_cb(r->row, row_event, LV_EVENT_ALL, idx);
-    lv_obj_align(r->name, tall ? LV_ALIGN_TOP_LEFT : LV_ALIGN_LEFT_MID, 0, tall ? 9 : 0);
+    lv_obj_align(r->name, tall ? LV_ALIGN_TOP_LEFT : LV_ALIGN_LEFT_MID, 0, PX(tall ? 9 : 0));
 
     // Right-hand side of the top line: [value] [chip] [switch].
     int right = 0;
     if (has_switch(it)) {
         r->sw = lv_switch_create(r->row);
-        lv_obj_set_size(r->sw, 52, 26);
+        lv_obj_set_size(r->sw, PX(52), PX(26));
         lv_obj_set_style_bg_color(r->sw, COL_TRACK, LV_PART_MAIN);
         lv_obj_set_style_bg_color(r->sw, COL_FILL, LV_PART_INDICATOR | LV_STATE_CHECKED);
-        lv_obj_align(r->sw, tall ? LV_ALIGN_TOP_RIGHT : LV_ALIGN_RIGHT_MID, 0, tall ? 7 : 0);
+        lv_obj_align(r->sw, tall ? LV_ALIGN_TOP_RIGHT : LV_ALIGN_RIGHT_MID, 0, PX(tall ? 7 : 0));
         lv_obj_add_event_cb(r->sw, switch_event, LV_EVENT_VALUE_CHANGED, idx);
-        right = 62;
+        right = PX(62);
     }
     if (it->kind == ITEM_LEVEL_CYCLE) {
         r->chip = lv_button_create(r->row);
-        lv_obj_set_size(r->chip, 62, 28);
-        lv_obj_set_style_radius(r->chip, 14, 0);
+        lv_obj_set_size(r->chip, PX(62), PX(28));
+        lv_obj_set_style_radius(r->chip, PX(14), 0);
         lv_obj_set_style_bg_color(r->chip, COL_TRACK, 0);
         lv_obj_set_style_shadow_width(r->chip, 0, 0);
-        lv_obj_align(r->chip, LV_ALIGN_TOP_RIGHT, 0, 6);
+        lv_obj_align(r->chip, LV_ALIGN_TOP_RIGHT, 0, PX(6));
         lv_obj_add_event_cb(r->chip, chip_event, LV_EVENT_SHORT_CLICKED, idx);
-        r->chip_label = text(r->chip, &lv_font_montserrat_14, COL_TEXT);
+        r->chip_label = text(r->chip, UI_FONT_14, COL_TEXT);
         lv_obj_center(r->chip_label);
-        right = 72;
+        right = PX(72);
     }
-    r->value = text(r->row, &lv_font_montserrat_20, COL_TEXT);
-    lv_obj_align(r->value, tall ? LV_ALIGN_TOP_RIGHT : LV_ALIGN_RIGHT_MID, -right, tall ? 9 : 0);
+    r->value = text(r->row, UI_FONT_20, COL_TEXT);
+    lv_obj_align(r->value, tall ? LV_ALIGN_TOP_RIGHT : LV_ALIGN_RIGHT_MID, -right, PX(tall ? 9 : 0));
 
     if (tall) {
         r->fader = lv_slider_create(r->row);
-        lv_obj_set_size(r->fader, lv_pct(100), 8);
-        lv_obj_align(r->fader, LV_ALIGN_BOTTOM_MID, 0, -14);
+        lv_obj_set_size(r->fader, lv_pct(100), PX(8));
+        lv_obj_align(r->fader, LV_ALIGN_BOTTOM_MID, 0, -PX(14));
         lv_obj_set_style_bg_color(r->fader, COL_TRACK, LV_PART_MAIN);
         lv_obj_set_style_bg_color(r->fader, COL_FILL, LV_PART_INDICATOR);
         lv_obj_set_style_bg_color(r->fader, COL_TEXT, LV_PART_KNOB);
-        lv_obj_set_style_pad_all(r->fader, 5, LV_PART_KNOB);
+        lv_obj_set_style_pad_all(r->fader, PX(5), LV_PART_KNOB);
         lv_obj_set_style_opa(r->fader, LV_OPA_40, LV_STATE_DISABLED);
         // Signed values (RIT, filter edges) fill from zero, not from the left.
         if (it->min < 0 && !is_choice(it))
@@ -483,7 +484,7 @@ void menu_create(lv_obj_t *screen)
 {
     s_menu = lv_obj_create(screen);
     lv_obj_remove_style_all(s_menu);
-    lv_obj_set_size(s_menu, 480, 480);
+    lv_obj_set_size(s_menu, UI_SIZE, UI_SIZE);
     lv_obj_set_style_radius(s_menu, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(s_menu, COL_FACE, 0);
     lv_obj_set_style_bg_opa(s_menu, LV_OPA_COVER, 0);
@@ -491,17 +492,17 @@ void menu_create(lv_obj_t *screen)
     lv_obj_add_event_cb(s_menu, menu_gesture, LV_EVENT_GESTURE, NULL);
     lv_obj_set_hidden(s_menu, true);
 
-    s_title = text(s_menu, &lv_font_montserrat_20, COL_HEAD);
-    lv_obj_align(s_title, LV_ALIGN_TOP_MID, 0, 34);
+    s_title = text(s_menu, UI_FONT_20, COL_HEAD);
+    lv_obj_align(s_title, LV_ALIGN_TOP_MID, 0, PX(34));
 
     // The list fits the circle's widest band; rows scroll under the top and
     // bottom edges. A vertical drag that starts on a fader still scrolls it.
     s_list = lv_obj_create(s_menu);
     lv_obj_remove_style_all(s_list);
-    lv_obj_set_size(s_list, 360, 334);
-    lv_obj_align(s_list, LV_ALIGN_TOP_MID, 0, 70);
+    lv_obj_set_size(s_list, PX(360), PX(334));
+    lv_obj_align(s_list, LV_ALIGN_TOP_MID, 0, PX(70));
     lv_obj_set_flex_flow(s_list, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(s_list, 6, 0);
+    lv_obj_set_style_pad_row(s_list, PX(6), 0);
     lv_obj_set_scroll_dir(s_list, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(s_list, LV_SCROLLBAR_MODE_OFF);
 
@@ -511,13 +512,13 @@ void menu_create(lv_obj_t *screen)
     // Grip: tap it or swipe up from it (the list itself scrolls on a swipe).
     lv_obj_t *grip = lv_obj_create(s_menu);
     lv_obj_remove_style_all(grip);
-    lv_obj_set_size(grip, 200, 56);
-    lv_obj_align(grip, LV_ALIGN_BOTTOM_MID, 0, -12);
+    lv_obj_set_size(grip, PX(200), PX(56));
+    lv_obj_align(grip, LV_ALIGN_BOTTOM_MID, 0, -PX(12));
     lv_obj_add_event_cb(grip, grip_event, LV_EVENT_SHORT_CLICKED, NULL);
     lv_obj_t *bar = lv_obj_create(grip);
     lv_obj_remove_style_all(bar);
-    lv_obj_set_size(bar, 90, 7);
-    lv_obj_set_style_radius(bar, 4, 0);
+    lv_obj_set_size(bar, PX(90), PX(7));
+    lv_obj_set_style_radius(bar, PX(4), 0);
     lv_obj_set_style_bg_color(bar, COL_DIM, 0);
     lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
     lv_obj_set_clickable(bar, false);
@@ -544,7 +545,7 @@ void menu_open(void)
         draw_row(i);
     lv_obj_set_hidden(s_menu, false);
     lv_obj_move_foreground(s_menu);
-    slide(-480, 0, false);
+    slide(-UI_SIZE, 0, false);
 }
 
 void menu_close(void)
@@ -554,7 +555,7 @@ void menu_close(void)
     leave_edit(true);
     send_pending();
     s_open = false;
-    slide(lv_obj_get_y(s_menu), -480, true);
+    slide(lv_obj_get_y(s_menu), -UI_SIZE, true);
 }
 
 void menu_update(const knob_model_t *m, int focus, bool model_changed)

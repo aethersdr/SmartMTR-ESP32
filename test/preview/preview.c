@@ -5,6 +5,7 @@
 #include "../../main/menu_items.h"
 #include "../../main/model.h"
 #include "../../main/ui.h"
+#include "../../main/ui_metrics.h"
 #include "../../main/usb_link.h"
 
 #include <math.h>
@@ -34,12 +35,12 @@ static void finger_read(lv_indev_t *indev, lv_indev_data_t *data)
     data->state = s_finger_down ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
 }
 
-static uint32_t s_fb[480 * 480];
+static uint32_t s_fb[UI_SIZE * UI_SIZE];
 
 static void flush(lv_display_t *d, const lv_area_t *a, uint8_t *px)
 {
     for (int y = a->y1; y <= a->y2; ++y)
-        memcpy(&s_fb[y * 480 + a->x1], px + (size_t)(y - a->y1) * (size_t)(a->x2 - a->x1 + 1) * 4,
+        memcpy(&s_fb[y * UI_SIZE + a->x1], px + (size_t)(y - a->y1) * (size_t)(a->x2 - a->x1 + 1) * 4,
                (size_t)(a->x2 - a->x1 + 1) * 4);
     lv_display_flush_ready(d);
 }
@@ -196,14 +197,35 @@ static int touch_test(void)
     lv_obj_t *af = find_label(lv_screen_active(), "AF\n50");
     CHECK(af && !lv_obj_is_visible(af), "the dock opens on the spectrum, tiles hidden");
     fresh_spectrum();
-    tap((lv_point_t){240, 250});
+    tap((lv_point_t){PX(240), PX(250)});
     CHECK(lv_obj_is_visible(af), "a tap on the spectrum shows the tiles");
     CHECK(s_action_count == 0, "...and is not also a tile tap");
     fresh_spectrum();
-    drag((lv_point_t){150, 335}, 180, 0);
+    drag((lv_point_t){PX(150), PX(335)}, PX(180), 0);
     fresh_spectrum();
     run_for(60);
     CHECK(!lv_obj_is_visible(af), "a sideways swipe switches back to the spectrum");
+    CHECK(count_kind(ACT_STEP_NEXT) == 0, "...and is not also a click");
+
+#if !BOARD_HAS_DIAL_CLICK
+    // No dial click on this board: a tap on the face away from its controls
+    // is the click (next tuning step), touch-and-hold the click-and-hold
+    // (tune lock). Taps out on the meter ring are ignored.
+    s_action_count = 0;
+    tap((lv_point_t){UI_HALF, UI_HALF + PX(64)});          // the step label
+    CHECK(count_kind(ACT_STEP_NEXT) == 1, "a tap on the face is a dial click");
+    s_action_count = 0;
+    tap((lv_point_t){UI_HALF, PX(16)});                    // top of the meter ring
+    CHECK(s_action_count == 0, "a tap out on the meter ring is not");
+    s_action_count = 0;
+    s_finger = (lv_point_t){UI_HALF, UI_HALF + PX(64)};
+    s_finger_down = true;
+    run_for(800);
+    s_finger_down = false;
+    run_for(100);
+    CHECK(count_kind(ACT_MENU_TOGGLE) == 1 && count_kind(ACT_STEP_NEXT) == 0,
+          "touch-and-hold on the face is a click-and-hold (tune lock)");
+#endif
 
     menu_open();
     run_for(400);
@@ -213,16 +235,21 @@ static int touch_test(void)
     lv_obj_t *list = lv_obj_get_parent(lv_obj_get_parent(rit));
     int before = lv_slider_get_value(rit);
 
+    // Bring the row fully into view first: how far down the list it starts
+    // depends on the board's rounding of row heights.
+    lv_obj_scroll_to_view(lv_obj_get_parent(rit), LV_ANIM_OFF);
+    run_for(100);
+    int32_t scrolled = lv_obj_get_scroll_y(list);
     s_action_count = 0;
-    drag(centre_of(rit), 4, -140);
-    CHECK(lv_obj_get_scroll_y(list) > 40, "a vertical drag starting on a fader scrolls the list");
+    drag(centre_of(rit), PX(4), -PX(140));
+    CHECK(lv_obj_get_scroll_y(list) - scrolled > PX(40), "a vertical drag starting on a fader scrolls the list");
     CHECK(count_kind(ACT_MENU_SET_LEVEL) == 0, "...and does not move the fader");
     CHECK(lv_slider_get_value(rit) == before, "...and the fader shows the radio's value");
 
     lv_obj_scroll_to_y(list, 0, LV_ANIM_OFF);
     run_for(100);
     s_action_count = 0;
-    drag(centre_of(rit), 90, 3);
+    drag(centre_of(rit), PX(90), PX(3));
     CHECK(count_kind(ACT_MENU_SET_LEVEL) > 0, "a sideways drag on a fader sets the level");
     knob_action_t last = s_actions[s_action_count - 1];
     CHECK(last.arg > before && last.arg % 10 == 0, "...upwards, snapped to the 10 Hz step");
@@ -310,9 +337,9 @@ int main(int argc, char **argv)
     m->revision = 1;
 
     lv_init();
-    lv_display_t *d = lv_display_create(480, 480);
+    lv_display_t *d = lv_display_create(UI_SIZE, UI_SIZE);
     lv_display_set_color_format(d, LV_COLOR_FORMAT_XRGB8888);
-    static uint8_t buf[480 * 480 * 4];
+    static uint8_t buf[UI_SIZE * UI_SIZE * 4];
     lv_display_set_buffers(d, buf, NULL, sizeof buf, LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(d, flush);
     ui_start(d);
@@ -354,7 +381,7 @@ int main(int argc, char **argv)
             list = lv_obj_get_parent(lv_obj_get_parent(mute));
         for (uint32_t i = 0; list && i < lv_obj_get_child_count(list) && n < 64; ++i) {
             lv_obj_t *row = lv_obj_get_child(list, (int32_t)i);
-            if (lv_obj_get_height(row) > 32)       // headers are 30 px
+            if (lv_obj_get_height(row) > PX(32))   // headers are PX(30)
                 heights[n++] = lv_obj_get_height(row);
         }
         bool same = n > 10;
@@ -377,9 +404,9 @@ int main(int argc, char **argv)
         m->revision++;
         run_for(100);
         lv_refr_now(d);
-        // Dock: 212 px wide, centered on x = 240; bars end at its right edge - 10.
-        const int right = 240 + 212 / 2 - 10, y = 240 + 8;   // dock center row
-        uint32_t px_in = s_fb[y * 480 + right - 3], px_out = s_fb[y * 480 + right + 4];
+        // Dock: PX(212) wide, centered; bars end at its right edge - PX(10).
+        const int right = UI_HALF + PX(212) / 2 - PX(10), y = UI_HALF + PX(8);   // dock center row
+        uint32_t px_in = s_fb[y * UI_SIZE + right - 3], px_out = s_fb[y * UI_SIZE + right + 4];
         int in_r = (px_in >> 16) & 0xFF, in_g = (px_in >> 8) & 0xFF, in_b = px_in & 0xFF;
         int out_b = px_out & 0xFF, out_g = (px_out >> 8) & 0xFF;
         bool bar_at_edge = in_g > 150 && in_b > 200 && in_r < 120;     // the cyan bar color
@@ -428,8 +455,8 @@ int main(int argc, char **argv)
     lv_refr_now(d);
 
     FILE *f = fopen(argc > 1 ? argv[1] : "face.ppm", "wb");
-    fprintf(f, "P6\n480 480\n255\n");
-    for (int i = 0; i < 480 * 480; ++i) {
+    fprintf(f, "P6\n%d %d\n255\n", UI_SIZE, UI_SIZE);
+    for (int i = 0; i < UI_SIZE * UI_SIZE; ++i) {
         uint8_t rgb[3] = {(uint8_t)(s_fb[i] >> 16), (uint8_t)(s_fb[i] >> 8), (uint8_t)s_fb[i]};
         fwrite(rgb, 1, 3, f);
     }
