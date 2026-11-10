@@ -13,8 +13,14 @@ design is his: **https://smartmtr.net/**
 
 </td></tr></table>
 
-A FlexRadio controller on the **Elecrow CrowPanel 2.1" HMI ESP32 Rotary
-Display** (DHE03921D: ESP32-S3R8, 480×480 round IPS touch screen, rotary dial that also clicks).
+A FlexRadio controller on a round ESP32-S3 rotary display. Two boards are
+supported, chosen at build time:
+
+- **Elecrow CrowPanel 2.1" HMI ESP32 Rotary Display** (DHE03921D: ESP32-S3R8,
+  480×480 round IPS touch screen, rotary dial that also clicks).
+- **Waveshare ESP32-S3-Knob-Touch-LCD-1.8** (ESP32-S3R8, 360×360 round touch
+  screen, rotary dial that does not click). The same face, scaled.
+
 The face is modeled on [SmartMTR](https://smartmtr.net/) by Dariusz Socha, SQ5X: S-meter arcs for two
 slices, SWR/COMP/PWR/MIC needles, and the frequency readout, with a dock of touch
 tiles in the middle.
@@ -44,6 +50,11 @@ There are two kinds of input, and this document keeps their names apart:
 | Touch-and-hold FILT | Next tuning step |
 | Tap a slice's **TX** label | Make that slice the transmit slice (gray = not TX, red outline = TX, filled = on air) |
 | Swipe down | Open the menu (below) |
+
+The Waveshare knob's dial does not click. On it, a **tap on the face** away
+from its tiles, spectrum and TX labels (within the inner part of the face,
+not out on the meter ring) is the click, and **touch-and-hold** there is the
+click-and-hold.
 
 ### Menu
 
@@ -128,7 +139,7 @@ report `0x02` (see AetherSDR `docs/ctr2-usb-relay-design.md`,
 Tiles: **AF** (audio level), **AGC** (threshold), **FILT** (width, 50 Hz per detent,
 about the passband center), and **NR / NB / ANF** (level).
 
-## Connections (back of the board)
+## Connections (CrowPanel, back of the board)
 
 | Connector | Pins | Use |
 | --- | --- | --- |
@@ -139,12 +150,21 @@ about the passband center), and **NR / NB / ANF** (level).
 
 ## Build and flash
 
-Requires ESP-IDF 6.0 or later.
+Requires ESP-IDF 6.0 or later. The default build is for the CrowPanel:
 
 ```sh
 . ~/esp/esp-idf-v6.0.3/export.sh
 idf.py build
 ```
+
+For the Waveshare knob, build into its own directory with its settings file:
+
+```sh
+idf.py -B build-waveshare -D SDKCONFIG=build-waveshare/sdkconfig \
+  -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.waveshare" build
+```
+
+### CrowPanel
 
 The firmware takes over the native USB port as a HID device, so the board's
 USB serial port is not available while it runs. To flash: hold **BOOT**, tap
@@ -159,6 +179,32 @@ Tap RESET to run it. Within about 3 s the board re-enumerates as
 `AetherSDR AETHER_KNOB`. If it is still `USB JTAG/serial debug unit`, the
 reset after flashing left it in download mode: tap RESET again, or run
 `python -m esptool --port <port> --after watchdog-reset chip-id`. Logs go to UART0 on the 4-pin UART header (115200).
+
+### Waveshare knob
+
+The board has two chips on one USB-C port, and the way round the plug goes
+picks which one the PC sees. One way gives the ESP32-S3 (native USB, the
+`USB JTAG/serial debug unit` or, running this firmware, `AETHER_KNOB`); the
+other gives the second chip, an ESP32 for Bluetooth audio, through a CH340
+serial adapter. AetherKnob runs on the ESP32-S3 only; if the PC shows a
+CH340, turn the plug over.
+
+To flash: hold **BOOT**, unplug and replug the USB-C cable, release BOOT. The
+screen stays dark and the ROM's USB serial port appears. Then:
+
+```sh
+idf.py -B build-waveshare -p /dev/ttyACM0 flash
+```
+
+Replug to run it. UART0 is not brought out on this board, so the firmware has
+no log output in normal use.
+
+### Bringing up a board
+
+Adding `sdkconfig.bringup` to `SDKCONFIG_DEFAULTS` builds a firmware that
+leaves the USB port as the chip's serial console, with logs, and logs dial
+turns, raw dial edges and touches, instead of starting the link to
+AetherSDR. It also flashes without the BOOT routine.
 
 ## Use with AetherSDR
 
@@ -175,7 +221,10 @@ needs AetherSDR with AetherKnob support (the `AETHER_KNOB` product string).
 
 | Path | What |
 | --- | --- |
-| `main/board.c` | Display (ST7701S over 3-wire SPI + RGB), touch, dial turn (PCNT) and click (PCF8574) |
+| `main/board.h` | The board interface, the display size and whether the dial clicks |
+| `main/board_crowpanel.c` | CrowPanel: display (ST7701S over 3-wire SPI + RGB), touch, dial turn (PCNT) and click (PCF8574) |
+| `main/board_waveshare.c` | Waveshare knob: display (ST77916 over QSPI), touch, dial turn (one pulse per detent, debounced) |
+| `main/ui_metrics.h` | Lengths and fonts of the 480 px layout, scaled to the board |
 | `main/usb_link.c` | TinyUSB vendor HID, device side of CTR2 link v0, radio task |
 | `main/ctr2_link.{c,h}` | Link framing, MIT, copied from AetherSDR `tools/ctr2-firmware-reference` |
 | `main/flex_api.c` | SmartSDR API client: bind, slices, commands, VITA-49 meters |
@@ -183,7 +232,7 @@ needs AetherSDR with AetherKnob support (the `AETHER_KNOB` product string).
 | `main/menu_items.c` | Menu rows: keys, ranges, commands (host-tested) |
 | `main/menu.c` | Swipe-down menu screen |
 | `test/` | Host test of the API client (`make -C test check`) |
-| `test/preview/` | Renders the screens on the PC (`make faces`) and drives the menu with a scripted finger and dial (`make touchtest`) |
+| `test/preview/` | Renders the screens on the PC (`make faces`) and drives the menu with a scripted finger and dial (`make touchtest`); `BOARD=waveshare` for the 360 px layout (`make clean` between boards) |
 | `docs/smartsdr-api-notes.md` | Protocol facts the client relies on, from FlexLib |
 
 ## Status
@@ -193,12 +242,9 @@ What is tested:
 - The firmware builds.
 - The API client passes host tests against a scripted radio session.
 
-Not yet verified on hardware:
-
-- Display bring-up.
-- Encoder counts per detent (`DIAL_COUNTS_PER_DETENT` in `board.c`).
-- Touch orientation.
-- Meters over the relay's UDP path. No CTR2 has exercised that path on hardware yet.
+Verified on hardware: on both boards, the display, touch, dial and the link
+through AetherSDR to a FLEX-8600, with the S-meters; on the CrowPanel, also the
+audio spectrum.
 
 ## License
 
