@@ -24,7 +24,6 @@ bool menu_is_open(void);
 // Called by the UI refresh: the model snapshot and the focus slice (-1: none).
 void menu_update(const knob_model_t *m, int focus, bool model_changed);
 
-// Dial input while the menu is open.
+// Dial turns while the menu is open: move the highlight, or change the row
+// a tap put in edit.
 void menu_dial_turn(int detents);
-void menu_dial_click(void);   // short click, sent on release
-void menu_dial_hold(void);    // click-and-hold, sent once the hold time passes

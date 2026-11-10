@@ -1,9 +1,6 @@
 LVGL := ../../managed_components/lvgl__lvgl
 SRCS := $(shell find $(LVGL)/src -name '*.c') preview.c ../../main/ui.c ../../main/meter_ballistics.c ../../main/menu.c ../../main/menu_items.c ../../main/model.c ../../main/ctr2_link.c
-# BOARD=waveshare renders the Waveshare knob's 360x360 layout.
-BOARD ?= crowpanel
-BOARD_FLAGS := $(if $(filter waveshare,$(BOARD)),-DCONFIG_AETHERKNOB_BOARD_WAVESHARE_KNOB18=1)
-CFLAGS := -O1 -w -I. -I$(LVGL) -DLV_CONF_INCLUDE_SIMPLE -DKNOB_HOST_TEST -I../../main $(BOARD_FLAGS)
+CFLAGS := -O1 -w -I. -I$(LVGL) -DLV_CONF_INCLUDE_SIMPLE -DKNOB_HOST_TEST -I../../main
 
 preview: $(SRCS) lv_conf.h
 	$(CC) $(CFLAGS) -o $@ $(SRCS) -lm

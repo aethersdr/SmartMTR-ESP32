@@ -1,7 +1,6 @@
-// Waveshare ESP32-S3-Knob-Touch-LCD-1.8: ST77916 360x360 panel over QSPI,
-// CST816 touch, a dial that only turns. Pins from Waveshare's schematic and
-// its ESP-IDF demo (user_config.h). The board's second chip, an ESP32 for
-// Bluetooth audio, is not used.
+// The Waveshare ESP32-S3-Knob-Touch-LCD-1.8 (board.h): ST77916 360x360 panel
+// over QSPI, CST816 touch, a dial that only turns. Pins from Waveshare's
+// schematic and its ESP-IDF demo (user_config.h).
 #include "board.h"
 
 #include "driver/gpio.h"
@@ -436,11 +435,6 @@ int board_dial_take_detents(void)
     }
 #endif
     return atomic_exchange(&s_dial_count, 0);
-}
-
-bool board_dial_is_down(void)
-{
-    return false;   // this dial does not click; ui.c takes a tap on the face instead
 }
 
 lv_display_t *board_init(void)

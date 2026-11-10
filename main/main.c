@@ -1,5 +1,5 @@
-// AetherKnob: a FlexRadio controller on a round rotary display (board.h),
-// reaching the radio through AetherSDR's CTR2 USB relay.
+// AetherKnob: a FlexRadio controller on the Waveshare ESP32-S3 knob
+// (board.h), reaching the radio through AetherSDR's CTR2 USB relay.
 #include "board.h"
 #include "esp_log.h"
 #include "esp_lvgl_port.h"

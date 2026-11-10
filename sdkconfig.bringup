@@ -1,3 +1,5 @@
-# Bring-up of a new board: add after the board's file in SDKCONFIG_DEFAULTS.
+# Bring-up and debugging: build with
+#   idf.py -B build-bringup -D SDKCONFIG=build-bringup/sdkconfig \
+#     -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.bringup" build
 CONFIG_AETHERKNOB_BRINGUP=y
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y

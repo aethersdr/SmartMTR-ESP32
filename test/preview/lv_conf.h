@@ -1010,7 +1010,7 @@
 #define LV_FONT_MONTSERRAT_12 1
 
 /** Montserrat 14 */
-#define LV_FONT_MONTSERRAT_14 1
+#define LV_FONT_MONTSERRAT_14 0
 
 /** Montserrat 16 */
 #define LV_FONT_MONTSERRAT_16 1
@@ -1019,7 +1019,7 @@
 #define LV_FONT_MONTSERRAT_18 0
 
 /** Montserrat 20 */
-#define LV_FONT_MONTSERRAT_20 1
+#define LV_FONT_MONTSERRAT_20 0
 
 /** Montserrat 22 */
 #define LV_FONT_MONTSERRAT_22 1
@@ -1031,7 +1031,7 @@
 #define LV_FONT_MONTSERRAT_26 0
 
 /** Montserrat 28 */
-#define LV_FONT_MONTSERRAT_28 1
+#define LV_FONT_MONTSERRAT_28 0
 
 /** Montserrat 30 */
 #define LV_FONT_MONTSERRAT_30 1
@@ -1049,7 +1049,7 @@
 #define LV_FONT_MONTSERRAT_38 0
 
 /** Montserrat 40 */
-#define LV_FONT_MONTSERRAT_40 1
+#define LV_FONT_MONTSERRAT_40 0
 
 /** Montserrat 42 */
 #define LV_FONT_MONTSERRAT_42 0
@@ -1061,7 +1061,7 @@
 #define LV_FONT_MONTSERRAT_46 0
 
 /** Montserrat 48 */
-#define LV_FONT_MONTSERRAT_48 1
+#define LV_FONT_MONTSERRAT_48 0
 
 /** Montserrat 28 (compressed) */
 #define LV_FONT_MONTSERRAT_28_COMPRESSED 0
@@ -1144,7 +1144,7 @@
  *  - LV_FONT_DEFAULT_UNSCII_8 (enable: LV_FONT_UNSCII_8)
  *  - LV_FONT_DEFAULT_UNSCII_16 (enable: LV_FONT_UNSCII_16)
  */
-#define LV_FONT_DEFAULT &lv_font_montserrat_20
+#define LV_FONT_DEFAULT &lv_font_montserrat_16
 
 #endif /*!LV_USE_CUSTOM_FONT_DEFAULT*/
 

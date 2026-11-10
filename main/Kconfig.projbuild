@@ -1,23 +1,10 @@
 menu "AetherKnob"
 
-    choice AETHERKNOB_BOARD
-        prompt "AetherKnob board"
-        default AETHERKNOB_BOARD_CROWPANEL21
-        help
-            The round display board to build for.
-
-        config AETHERKNOB_BOARD_CROWPANEL21
-            bool "Elecrow CrowPanel 2.1\" rotary display (DHE03921D)"
-
-        config AETHERKNOB_BOARD_WAVESHARE_KNOB18
-            bool "Waveshare ESP32-S3-Knob-Touch-LCD-1.8"
-    endchoice
-
     config AETHERKNOB_BRINGUP
         bool "Bring-up mode: no USB link, console on the USB port"
         default n
         help
-            For bringing up a new board. The USB port stays the chip's
+            For bringing up the board. The USB port stays the chip's
             USB-Serial/JTAG console (also set CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG)
             instead of the HID link to AetherSDR, and dial turns and touches
             are logged. The port then also flashes without the BOOT button.
