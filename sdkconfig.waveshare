@@ -1,0 +1,10 @@
+# Waveshare ESP32-S3-Knob-Touch-LCD-1.8. Build with
+#   idf.py -B build-waveshare -D SDKCONFIG=build-waveshare/sdkconfig \
+#     -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.waveshare" build
+CONFIG_AETHERKNOB_BOARD_WAVESHARE_KNOB18=y
+
+# The 360x360 layout's fonts (ui_metrics.h)
+CONFIG_LV_FONT_MONTSERRAT_12=y
+CONFIG_LV_FONT_MONTSERRAT_16=y
+CONFIG_LV_FONT_MONTSERRAT_22=y
+CONFIG_LV_FONT_MONTSERRAT_30=y

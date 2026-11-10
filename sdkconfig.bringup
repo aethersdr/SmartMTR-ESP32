@@ -1,0 +1,3 @@
+# Bring-up of a new board: add after the board's file in SDKCONFIG_DEFAULTS.
+CONFIG_AETHERKNOB_BRINGUP=y
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y

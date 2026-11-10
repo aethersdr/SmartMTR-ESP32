@@ -8,3 +8,4 @@ test/preview/preview
 test/preview/*.ppm
 test/preview/*.png
 CLAUDE.md
+build-*/

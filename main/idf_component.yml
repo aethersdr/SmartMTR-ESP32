@@ -1,7 +1,8 @@
 dependencies:
   idf: ">=6.0"
-  espressif/esp_lcd_st7701: "^2"
+  espressif/esp_lcd_st7701: "^2"           # CrowPanel panel
+  espressif/esp_lcd_panel_io_additions: "^1"  # CrowPanel panel's 3-wire SPI
+  espressif/esp_lcd_st77916: "^2"          # Waveshare knob panel
   espressif/esp_lvgl_port: "^2"
   lvgl/lvgl: "^9.2"
   espressif/esp_tinyusb: "^2"
-  espressif/esp_lcd_panel_io_additions: "^1"

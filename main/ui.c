@@ -10,6 +10,10 @@
 #include "ui_metrics.h"
 #include "usb_link.h"
 
+#if CONFIG_AETHERKNOB_BRINGUP
+#include "esp_log.h"
+#endif
+
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -762,6 +766,10 @@ static void handle_dial(const knob_model_t *m)
     held = held || s_tap_hold;
     s_tap_click = s_tap_hold = false;
 #endif
+#if CONFIG_AETHERKNOB_BRINGUP
+    if (detents || clicked || held)
+        ESP_LOGI("ui", "dial %+d%s%s", detents, clicked ? " click" : "", held ? " hold" : "");
+#endif
 
     if (menu_is_open()) {
         if (detents)
@@ -918,7 +926,7 @@ void ui_start(lv_display_t *disp)
     tiles(s_tiles_box);
     spectrum_panel(face);
 #if !BOARD_HAS_DIAL_CLICK
-    lv_obj_remove_flag(s_tiles_box, LV_OBJ_FLAG_CLICKABLE);   // taps between tiles reach the face
+    lv_obj_set_clickable(s_tiles_box, false);   // taps between tiles reach the face
     lv_obj_add_event_cb(face, face_tap, LV_EVENT_SHORT_CLICKED, NULL);
     lv_obj_add_event_cb(face, face_tap, LV_EVENT_LONG_PRESSED, NULL);
 #endif
